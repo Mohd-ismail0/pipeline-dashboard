@@ -15,6 +15,11 @@ const lastEvaluated = new Map<string, number>();
 let intervalRef: ReturnType<typeof setInterval> | null = null;
 let running = false;
 
+/** Single evaluation pass (used by Azure Timer hitting internal API). */
+export async function runSchedulerTickOnce() {
+  await tickScheduler();
+}
+
 async function tickScheduler() {
   if (running) return;
   running = true;
@@ -31,12 +36,14 @@ async function tickScheduler() {
         });
         const nextAt = expression.next().toDate().getTime();
         if (nextAt <= now) {
+          const pipeline = state.pipelines[schedule.configId];
           await queueService.enqueue({
             type: "run-pipeline",
             configId: schedule.configId,
             triggerType: "cron",
             enqueuedAt: new Date().toISOString(),
             scheduledAt: new Date(nextAt).toISOString(),
+            pipelineSnapshot: pipeline,
           });
         }
       } catch {

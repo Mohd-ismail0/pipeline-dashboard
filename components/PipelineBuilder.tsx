@@ -27,8 +27,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { defaultConfigForNodeType } from "@/lib/defaultNodeConfig";
-import type { PipelineNodeType, PipelinePersist } from "@/types/pipeline";
+import { defaultConfigForHandlerId } from "@/lib/defaultNodeConfig";
+import type { PipelinePersist } from "@/types/pipeline";
 
 function newId() {
   if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
@@ -37,7 +37,10 @@ function newId() {
   return `n-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-type RFNode = Node<{ config: Record<string, unknown> }, PipelineNodeType>;
+type RFNode = Node<
+  { config: Record<string, unknown>; handlerId?: string; handlerVersion?: string },
+  string
+>;
 
 function PipelineNodeCard(props: NodeProps<RFNode>) {
   const label = props.type?.toUpperCase() ?? "NODE";
@@ -60,13 +63,7 @@ function PipelineNodeCard(props: NodeProps<RFNode>) {
   );
 }
 
-const NODE_TYPES: PipelineNodeType[] = [
-  "http",
-  "extract",
-  "transform",
-  "diff",
-  "storage",
-];
+const FALLBACK_HANDLERS = ["http", "extract", "transform", "diff", "storage"] as const;
 
 function BuilderInner(props: {
   configId: string;
@@ -81,6 +78,9 @@ function BuilderInner(props: {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
+  const [palette, setPalette] = useState<{ id: string; label: string }[]>(() =>
+    FALLBACK_HANDLERS.map((id) => ({ id, label: id })),
+  );
   const skipNextSave = useRef(true);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rfInstance = useRef<ReactFlowInstance<RFNode, Edge> | null>(null);
@@ -91,16 +91,24 @@ function BuilderInner(props: {
     edgesRef.current = edges;
   }, [nodes, edges]);
 
-  const nodeTypes = useMemo(
-    () => ({
-      http: PipelineNodeCard,
-      extract: PipelineNodeCard,
-      transform: PipelineNodeCard,
-      diff: PipelineNodeCard,
-      storage: PipelineNodeCard,
-    }),
-    [],
-  );
+  useEffect(() => {
+    void fetch("/api/node-catalog")
+      .then((r) => r.json() as Promise<{ entries: { handlerId: string; displayName: string }[] }>)
+      .then((d) => {
+        if (Array.isArray(d.entries) && d.entries.length > 0) {
+          setPalette(
+            d.entries.map((e) => ({ id: e.handlerId, label: e.displayName ?? e.handlerId })),
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const nodeTypes = useMemo(() => {
+    const o: Record<string, typeof PipelineNodeCard> = {};
+    for (const p of palette) o[p.id] = PipelineNodeCard;
+    return o;
+  }, [palette]);
 
   useEffect(() => {
     skipNextSave.current = true;
@@ -166,10 +174,8 @@ function BuilderInner(props: {
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      const type = e.dataTransfer.getData(
-        "application/reactflow",
-      ) as PipelineNodeType;
-      if (!NODE_TYPES.includes(type)) return;
+      const type = e.dataTransfer.getData("application/reactflow");
+      if (!palette.some((p) => p.id === type)) return;
       const position =
         rfInstance.current?.screenToFlowPosition({
           x: e.clientX,
@@ -180,15 +186,19 @@ function BuilderInner(props: {
         id,
         type,
         position,
-        data: { config: defaultConfigForNodeType(type) },
+        data: {
+          config: defaultConfigForHandlerId(type),
+          handlerId: type,
+          handlerVersion: "1.0.0",
+        },
       };
       setNodes((nds) => [...nds, node]);
       scheduleSave();
     },
-    [scheduleSave, setNodes],
+    [palette, scheduleSave, setNodes],
   );
 
-  const onDragStart = (event: React.DragEvent, type: PipelineNodeType) => {
+  const onDragStart = (event: React.DragEvent, type: string) => {
     event.dataTransfer.setData("application/reactflow", type);
     event.dataTransfer.effectAllowed = "move";
   };
@@ -234,13 +244,14 @@ function BuilderInner(props: {
     }
     for (const n of nodes) {
       const cfg = n.data?.config ?? {};
-      if (n.type === "http" && !String(cfg.url ?? "").trim()) {
-        errs.push(`HTTP node ${n.id} requires URL.`);
+      const kind = (typeof n.data?.handlerId === "string" && n.data.handlerId) || n.type;
+      if ((kind === "http" || kind === "external_api_scrape") && !String(cfg.url ?? "").trim()) {
+        errs.push(`${kind} node ${n.id} requires URL.`);
       }
-      if (n.type === "extract" && !String(cfg.selector ?? "").trim()) {
+      if (kind === "extract" && !String(cfg.selector ?? "").trim()) {
         errs.push(`Extract node ${n.id} requires selector.`);
       }
-      if (n.type === "storage" && !String(cfg.container ?? "").trim()) {
+      if (kind === "storage" && !String(cfg.container ?? "").trim()) {
         errs.push(`Storage node ${n.id} requires container.`);
       }
     }
@@ -296,17 +307,18 @@ function BuilderInner(props: {
             Nodes
           </p>
           <Separator />
-          {NODE_TYPES.map((t) => (
+          {palette.map((t) => (
             <Button
-              key={t}
+              key={t.id}
               type="button"
               variant="outline"
               size="sm"
               className="h-8 justify-start font-mono text-[11px]"
               draggable
-              onDragStart={(e) => onDragStart(e, t)}
+              onDragStart={(e) => onDragStart(e, t.id)}
+              title={t.label}
             >
-              {t}
+              {t.id}
             </Button>
           ))}
         </Card>

@@ -6,21 +6,22 @@ import type { ScrapingConfig } from "@/types/config";
 import type { PipelineReactFlowNode } from "@/types/pipeline";
 
 const bodySchema = z.object({
-  secret: z.string(),
   config: z.custom<ScrapingConfig>(),
   node: z.custom<PipelineReactFlowNode>(),
   upstream: z.unknown().optional(),
 });
 
-function authorize(secret: string) {
+function authorize(req: Request) {
   const expected = process.env.INTERNAL_API_SECRET?.trim();
-  if (!expected || secret !== expected) {
-    return false;
-  }
-  return true;
+  const got =
+    req.headers.get("x-internal-secret")?.trim() ?? new URL(req.url).searchParams.get("secret");
+  return Boolean(expected && got === expected);
 }
 
 export async function POST(req: Request) {
+  if (!authorize(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   let body: unknown;
   try {
     body = await req.json();
@@ -30,9 +31,6 @@ export async function POST(req: Request) {
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Validation failed" }, { status: 400 });
-  }
-  if (!authorize(parsed.data.secret)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { config, node, upstream } = parsed.data;
   const out = await executeSingleNode({ config, node, upstream });

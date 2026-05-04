@@ -21,9 +21,10 @@ export interface CreateRunLogInput {
 
 export const runLogService = {
   async append(input: CreateRunLogInput): Promise<PipelineRunLog> {
+    const { finalOutput, ...rest } = input;
     const log: PipelineRunLog = {
       id: randomUUID(),
-      ...input,
+      ...rest,
     };
     await updateAppState((s) => {
       s.runLogs.push(log);
@@ -37,7 +38,7 @@ export const runLogService = {
       ok: input.ok,
       orderedNodeIds: input.orderedNodeIds,
       nodeResults: input.nodeResults,
-      finalOutput: input.finalOutput,
+      finalOutput,
     };
     await runEventService.recordFromPipelineResult({
       runId: log.id,

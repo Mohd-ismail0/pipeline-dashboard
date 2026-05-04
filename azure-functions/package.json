@@ -1,0 +1,17 @@
+{
+  "name": "pipeline-azure-functions",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}

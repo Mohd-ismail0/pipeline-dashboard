@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { persistRemotePipelineRun } from "@/lib/services/pipelineRunner";
+import { persistPipelineRun } from "@/lib/services/pipelineRunner";
 import type { PipelinePersist } from "@/types/pipeline";
 import type { PipelineRunResult, RunTriggerType } from "@/types/config";
 
 const bodySchema = z.object({
-  secret: z.string(),
   configId: z.string(),
   triggerType: z.enum(["manual", "cron"]),
   startedAt: z.string(),
@@ -14,12 +13,17 @@ const bodySchema = z.object({
   pipelineSnapshot: z.custom<PipelinePersist>().optional(),
 });
 
-function authorize(secret: string) {
+function authorize(req: Request) {
   const expected = process.env.INTERNAL_API_SECRET?.trim();
-  return Boolean(expected && secret === expected);
+  const got =
+    req.headers.get("x-internal-secret")?.trim() ?? new URL(req.url).searchParams.get("secret");
+  return Boolean(expected && got === expected);
 }
 
 export async function POST(req: Request) {
+  if (!authorize(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   let body: unknown;
   try {
     body = await req.json();
@@ -30,11 +34,8 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Validation failed" }, { status: 400 });
   }
-  if (!authorize(parsed.data.secret)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
   const { configId, triggerType, startedAt, result, pipelineSnapshot } = parsed.data;
-  const { logId } = await persistRemotePipelineRun({
+  const { logId } = await persistPipelineRun({
     configId,
     triggerType: triggerType as RunTriggerType,
     startedAt,

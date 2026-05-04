@@ -58,11 +58,14 @@ export function NodeConfigDrawer(props: {
 
   if (!props.node) return null;
 
-  const type = props.node.type as PipelineNodeType;
+  const effective =
+    (typeof props.node.data?.handlerId === "string" && props.node.data.handlerId) ||
+    props.node.type;
+  const type = effective as PipelineNodeType | string;
 
   const apply = () => {
     let next = { ...draft };
-    if (type === "http") {
+    if (type === "http" || type === "external_api_scrape") {
       try {
         next = { ...next, headers: JSON.parse(headersStr || "{}") as Record<string, string> };
       } catch {
@@ -74,21 +77,22 @@ export function NodeConfigDrawer(props: {
   };
 
   const hasRequiredErrors =
-    (type === "http" && !String(draft.url ?? "").trim()) ||
+    ((type === "http" || type === "external_api_scrape") && !String(draft.url ?? "").trim()) ||
     (type === "extract" && !String(draft.selector ?? "").trim()) ||
-    (type === "storage" && !String(draft.container ?? "").trim());
+    (type === "storage" && !String(draft.container ?? "").trim()) ||
+    (type === "python_scrape" && !String(draft.entrypoint ?? "").trim());
 
   return (
     <Drawer open={props.open} onOpenChange={props.onOpenChange} direction="right">
       <DrawerContent className="data-[vaul-drawer-direction=right]:sm:max-w-md">
         <DrawerHeader>
           <DrawerTitle className="font-mono text-sm">
-            {type.toUpperCase()}
+            {String(type).toUpperCase()}
           </DrawerTitle>
           <DrawerDescription>Node {props.node.id}</DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-4">
-          {type === "http" ? (
+          {type === "http" || type === "external_api_scrape" ? (
             <>
               <div className="grid gap-2">
                 <Label>Method</Label>
@@ -251,6 +255,85 @@ export function NodeConfigDrawer(props: {
                 </SelectContent>
               </Select>
             </div>
+          ) : null}
+
+          {type === "python_scrape" ? (
+            <>
+              <div className="grid gap-2">
+                <Label>Entrypoint</Label>
+                <Input
+                  className="h-8 font-mono text-xs"
+                  value={String(draft.entrypoint ?? "")}
+                  onChange={(e) => setDraft((d) => ({ ...d, entrypoint: e.target.value }))}
+                  placeholder="module:function"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Args (JSON)</Label>
+                <Textarea
+                  className="min-h-[80px] font-mono text-xs"
+                  value={JSON.stringify(draft.args ?? {}, null, 2)}
+                  onChange={(e) => {
+                    try {
+                      setDraft((d) => ({ ...d, args: JSON.parse(e.target.value) as object }));
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                />
+              </div>
+            </>
+          ) : null}
+
+          {type === "browser_scrape" ? (
+            <>
+              <div className="grid gap-2">
+                <Label>URL template</Label>
+                <Input
+                  className="h-8 font-mono text-xs"
+                  value={String(draft.urlTemplate ?? "")}
+                  onChange={(e) => setDraft((d) => ({ ...d, urlTemplate: e.target.value }))}
+                  placeholder="{{target_url}}"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>waitUntil</Label>
+                <Input
+                  className="h-8 font-mono text-xs"
+                  value={String(draft.waitUntil ?? "networkidle")}
+                  onChange={(e) => setDraft((d) => ({ ...d, waitUntil: e.target.value }))}
+                />
+              </div>
+            </>
+          ) : null}
+
+          {type === "js_script" ? (
+            <>
+              <div className="grid gap-2">
+                <Label>Mode</Label>
+                <Select
+                  value={String(draft.mode ?? "stub")}
+                  onValueChange={(v) => setDraft((d) => ({ ...d, mode: v }))}
+                >
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stub">stub</SelectItem>
+                    <SelectItem value="eval_upstream">eval_upstream (unsafe)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Expression (JS, upstream only)</Label>
+                <Textarea
+                  className="min-h-[80px] font-mono text-xs"
+                  value={String(draft.expression ?? "")}
+                  onChange={(e) => setDraft((d) => ({ ...d, expression: e.target.value }))}
+                  placeholder="upstream"
+                />
+              </div>
+            </>
           ) : null}
 
           {type === "storage" ? (

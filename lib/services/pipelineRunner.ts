@@ -17,6 +17,7 @@ function pickDocumentId(result: PipelineRunResult): string | undefined {
   return undefined;
 }
 
+/** Persist run outcome + config status + run log + optional fal-style events (Prisma). */
 export async function persistPipelineRun(args: {
   configId: string;
   triggerType: RunTriggerType;
@@ -100,15 +101,4 @@ export async function runPipelineForConfig(args: {
     pipelineSnapshot: pipeline,
   });
   return { result, logId };
-}
-
-/** Called by Azure Durable completion activity or internal bridge. */
-export async function persistRemotePipelineRun(args: {
-  configId: string;
-  triggerType: RunTriggerType;
-  startedAt: string;
-  result: PipelineRunResult;
-  pipelineSnapshot?: PipelinePersist;
-}): Promise<{ logId: string }> {
-  return persistPipelineRun(args);
 }

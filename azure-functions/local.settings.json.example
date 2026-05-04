@@ -1,0 +1,11 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "APP_BASE_URL": "http://host.docker.internal:3000",
+    "INTERNAL_API_SECRET": "change-me",
+    "PIPELINE_QUEUE_NAME": "pipeline-runs",
+    "AzureFunctionsJobHost__extensions__durableTask__hubName": "PipelineHub"
+  }
+}
