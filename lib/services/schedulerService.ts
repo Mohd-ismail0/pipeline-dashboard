@@ -1,7 +1,8 @@
 import { CronExpressionParser } from "cron-parser";
 
 import type { ScheduleRegistration } from "@/lib/store/appState";
-import { readAppState, updateAppState } from "@/lib/store/jsonStore";
+import { allowInProcessScheduler } from "@/lib/env/execution";
+import { readAppState, updateAppState } from "@/lib/store/appStore";
 import type { ScrapingConfig } from "@/types/config";
 
 import { queueService } from "./queueService";
@@ -69,6 +70,7 @@ export const schedulerService = {
   },
 
   start() {
+    if (!allowInProcessScheduler()) return;
     if (intervalRef) return;
     intervalRef = setInterval(() => {
       void tickScheduler();

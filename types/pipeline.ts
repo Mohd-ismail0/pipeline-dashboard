@@ -1,18 +1,25 @@
 import type { Edge, Node } from "@xyflow/react";
 
+/** Built-in handler ids; catalog may add more at runtime. */
 export type PipelineNodeType =
   | "http"
   | "extract"
   | "transform"
   | "diff"
-  | "storage";
+  | "storage"
+  | "python_scrape"
+  | "browser_scrape"
+  | "js_script"
+  | "external_api_scrape";
 
-/** Strict node payload aligned with execution handlers */
+/** Node payload; handlerId pins catalog version for durable runs. */
 export interface PipelineNodePayload extends Record<string, unknown> {
   config: Record<string, unknown>;
+  handlerId?: string;
+  handlerVersion?: string;
 }
 
-export type PipelineReactFlowNode = Node<PipelineNodePayload, PipelineNodeType>;
+export type PipelineReactFlowNode = Node<PipelineNodePayload, string>;
 
 export interface PipelineEdgePersist {
   source: string;

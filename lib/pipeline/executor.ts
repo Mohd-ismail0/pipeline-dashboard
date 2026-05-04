@@ -1,60 +1,45 @@
 import type { PipelineRunResult, ScrapingConfig } from "@/types/config";
-import type { PipelinePersist } from "@/types/pipeline";
+import type { PipelinePersist, PipelineReactFlowNode } from "@/types/pipeline";
 import type { Edge, Node } from "@xyflow/react";
 
 import { nodeHandlers, type PipelineNode } from "./nodeHandlers";
+import { incomingMap, mergeUpstreamParts, topoSort } from "./topo";
 
-function topoSort(nodes: Node[], edges: Edge[]): { order: string[]; error?: string } {
-  const ids = new Set(nodes.map((n) => n.id));
-  const adj = new Map<string, string[]>();
-  const indeg = new Map<string, number>();
-  for (const n of nodes) {
-    indeg.set(n.id, 0);
-    adj.set(n.id, []);
-  }
-  for (const e of edges) {
-    if (!ids.has(e.source) || !ids.has(e.target)) continue;
-    adj.get(e.source)!.push(e.target);
-    indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
-  }
-  const q: string[] = [];
-  for (const [id, d] of indeg) if (d === 0) q.push(id);
-  q.sort();
-  const order: string[] = [];
-  while (q.length) {
-    const id = q.shift()!;
-    order.push(id);
-    const outs = adj.get(id) ?? [];
-    outs.sort();
-    for (const t of outs) {
-      const next = (indeg.get(t) ?? 0) - 1;
-      indeg.set(t, next);
-      if (next === 0) q.push(t);
-    }
-    q.sort();
-  }
-  if (order.length !== nodes.length) {
-    return { order: [], error: "Pipeline graph has a cycle or disconnected nodes" };
-  }
-  return { order };
+export function resolveHandlerId(node: PipelineNode): string {
+  const data = node.data as Record<string, unknown> | undefined;
+  const h = data?.handlerId;
+  if (typeof h === "string" && h.trim()) return h.trim();
+  return String(node.type ?? "");
 }
 
-function mergeUpstreamParts(parts: unknown[]): unknown {
-  if (parts.length === 0) return undefined;
-  if (parts.length === 1) return parts[0];
-  if (parts.every((p) => typeof p === "string")) return parts.join("\n");
-  return parts;
-}
-
-function incomingMap(edges: Edge[], nodeIds: Set<string>) {
-  const map = new Map<string, string[]>();
-  for (const id of nodeIds) map.set(id, []);
-  for (const e of edges) {
-    if (!nodeIds.has(e.source) || !nodeIds.has(e.target)) continue;
-    map.get(e.target)!.push(e.source);
+export async function executeSingleNode(args: {
+  config: ScrapingConfig;
+  node: PipelineReactFlowNode;
+  upstream: unknown;
+}): Promise<{
+  nodeId: string;
+  type: string;
+  ok: boolean;
+  output?: unknown;
+  error?: string;
+}> {
+  const { config, node, upstream } = args;
+  const id = node.id;
+  const handlerId = resolveHandlerId(node as PipelineNode);
+  const handler = nodeHandlers[handlerId];
+  if (!handler) {
+    return {
+      nodeId: id,
+      type: handlerId,
+      ok: false,
+      error: `No handler for node: ${handlerId}`,
+    };
   }
-  for (const [, arr] of map) arr.sort();
-  return map;
+  const res = await handler({ config, upstream }, node as PipelineNode);
+  if (!res.ok) {
+    return { nodeId: id, type: handlerId, ok: false, error: res.error };
+  }
+  return { nodeId: id, type: handlerId, ok: true, output: res.output };
 }
 
 export async function executePipeline(args: {
@@ -92,18 +77,22 @@ export async function executePipeline(args: {
   for (const id of order) {
     const node = nodeById.get(id);
     if (!node) continue;
-    const type = node.type as PipelineNode["type"];
+    const handlerId = resolveHandlerId(node as PipelineNode);
     const parents = incoming.get(id) ?? [];
     const parts = parents.map((p) => outputs.get(p)).filter((v) => v !== undefined);
     const upstream = mergeUpstreamParts(parts);
 
-    const handler = nodeHandlers[type];
-    if (!handler) {
+    const single = await executeSingleNode({
+      config,
+      node: node as PipelineReactFlowNode,
+      upstream,
+    });
+    if (!single.ok) {
       nodeResults.push({
-        nodeId: id,
-        type,
+        nodeId: single.nodeId,
+        type: single.type,
         ok: false,
-        error: `No handler for node type: ${type}`,
+        error: single.error,
       });
       return {
         configId: config.id,
@@ -113,25 +102,13 @@ export async function executePipeline(args: {
         finalOutput: undefined,
       };
     }
-
-    const res = await handler({ config, upstream }, node as PipelineNode);
-    if (!res.ok) {
-      nodeResults.push({
-        nodeId: id,
-        type,
-        ok: false,
-        error: res.error,
-      });
-      return {
-        configId: config.id,
-        ok: false,
-        orderedNodeIds: order,
-        nodeResults,
-        finalOutput: undefined,
-      };
-    }
-    outputs.set(id, res.output);
-    nodeResults.push({ nodeId: id, type, ok: true, output: res.output });
+    outputs.set(id, single.output);
+    nodeResults.push({
+      nodeId: single.nodeId,
+      type: single.type,
+      ok: true,
+      output: single.output,
+    });
   }
 
   const lastId = order[order.length - 1];

@@ -50,4 +50,6 @@ export interface PipelineRunLog {
   orderedNodeIds: string[];
   nodeResults: NodeRunResult[];
   documentId?: string;
+  /** Immutable graph + handler pins at run start (production / durable). */
+  pipelineSnapshot?: unknown;
 }

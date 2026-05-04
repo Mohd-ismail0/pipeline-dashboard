@@ -6,13 +6,12 @@ import type {
   DiffNodeConfig,
   ExtractNodeConfig,
   HttpNodeConfig,
-  PipelineNodeType,
   StorageNodeConfig,
   TransformNodeConfig,
 } from "@/types/pipeline";
 import type { Node } from "@xyflow/react";
 
-export type PipelineNode = Node<{ config: Record<string, unknown> }, PipelineNodeType>;
+export type PipelineNode = Node<{ config: Record<string, unknown> }, string>;
 
 function asRecord(v: unknown): Record<string, unknown> {
   if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
@@ -205,8 +204,70 @@ async function handleStorage(
   return { ok: true, output: { documentId: doc.id, name: doc.name } };
 }
 
+/** Placeholder: wire to Azure Python Function or Container Apps job. */
+async function handlePythonScrape(
+  _ctx: NodeHandlerContext,
+  _node: PipelineNode,
+): Promise<HandlerResult> {
+  return {
+    ok: true,
+    output: {
+      _runtime: "python",
+      message:
+        "Stub node: deploy Azure Function activity or container job and set node catalog azureTarget.",
+    },
+  };
+}
+
+/** Placeholder: Playwright / browser workloads belong on Container Apps. */
+async function handleBrowserScrape(
+  _ctx: NodeHandlerContext,
+  _node: PipelineNode,
+): Promise<HandlerResult> {
+  return {
+    ok: true,
+    output: {
+      _runtime: "browser",
+      message: "Stub node: run Playwright workers on Azure Container Apps; route via catalog azureTarget.",
+    },
+  };
+}
+
+/** High-risk: curated scripts only; default stub in dev. */
+async function handleJsScript(
+  ctx: NodeHandlerContext,
+  node: PipelineNode,
+): Promise<HandlerResult> {
+  const c = asRecord(node.data?.config);
+  const mode = String(c.mode ?? "stub");
+  if (mode === "eval_upstream") {
+    try {
+      const fn = new Function("upstream", "config", `return (${String(c.expression ?? "null")});`);
+      const out = fn(ctx.upstream, ctx.config);
+      return { ok: true, output: out };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "script error" };
+    }
+  }
+  return {
+    ok: true,
+    output: {
+      _runtime: "js",
+      message: "Use mode=eval_upstream with caution; production should use isolated workers.",
+    },
+  };
+}
+
+/** Third-party HTTP scraping APIs (Bright Data, Zyte, etc.) — config holds URL template + headers. */
+async function handleExternalApiScrape(
+  ctx: NodeHandlerContext,
+  node: PipelineNode,
+): Promise<HandlerResult> {
+  return handleHttp(ctx, node);
+}
+
 export const nodeHandlers: Record<
-  PipelineNodeType,
+  string,
   (ctx: NodeHandlerContext, node: PipelineNode) => Promise<HandlerResult>
 > = {
   http: handleHttp,
@@ -214,4 +275,8 @@ export const nodeHandlers: Record<
   transform: handleTransform,
   diff: handleDiff,
   storage: handleStorage,
+  python_scrape: handlePythonScrape,
+  browser_scrape: handleBrowserScrape,
+  js_script: handleJsScript,
+  external_api_scrape: handleExternalApiScrape,
 };

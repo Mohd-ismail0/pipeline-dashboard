@@ -1,23 +1,28 @@
 import type { Edge, Node } from "@xyflow/react";
 
-import type { PipelinePersist, PipelineReactFlowNode, PipelineNodeType } from "@/types/pipeline";
+import type { PipelinePersist, PipelineReactFlowNode } from "@/types/pipeline";
 
-type UnknownNode = Partial<Node<Record<string, unknown>, PipelineNodeType>>;
+type UnknownNode = Partial<Node<Record<string, unknown>, string>>;
 type UnknownEdge = Partial<Edge>;
 
 function cleanNode(node: UnknownNode): PipelineReactFlowNode {
+  const rawData =
+    node.data && typeof node.data === "object" ? (node.data as Record<string, unknown>) : {};
+  const config = (rawData.config as Record<string, unknown>) ?? {};
+  const handlerId = typeof rawData.handlerId === "string" ? rawData.handlerId : undefined;
+  const handlerVersion =
+    typeof rawData.handlerVersion === "string" ? rawData.handlerVersion : undefined;
+  const rfType = String(node.type ?? "http");
   return {
     id: String(node.id ?? ""),
-    type: (node.type ?? "http") as PipelineNodeType,
+    type: rfType,
     position: {
       x: Number(node.position?.x ?? 0),
       y: Number(node.position?.y ?? 0),
     },
     data: {
-      config:
-        node.data && typeof node.data === "object"
-          ? ((node.data as Record<string, unknown>).config as Record<string, unknown>) ?? {}
-          : {},
+      config,
+      ...(handlerId ? { handlerId, handlerVersion } : {}),
     },
   };
 }

@@ -5,7 +5,7 @@ import { normalizePipeline } from "@/lib/pipeline/normalizePipeline";
 import { schedulerService } from "@/lib/services/schedulerService";
 import { ensureSchedulerBooted } from "@/lib/services/schedulerBootstrap";
 import { EMPTY_PIPELINE } from "@/lib/store/appState";
-import { readAppState, updateAppState } from "@/lib/store/jsonStore";
+import { readAppState, updateAppState } from "@/lib/store/appStore";
 import { isValidCron } from "@/lib/validateCron";
 import type { Archetype, ConfigStatus, ScrapingConfig } from "@/types/config";
 import type { PipelinePersist } from "@/types/pipeline";

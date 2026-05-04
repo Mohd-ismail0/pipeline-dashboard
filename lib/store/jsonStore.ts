@@ -20,7 +20,13 @@ function normalizeAppState(parsed: unknown): AppState {
         ? o.lastSnapshots
         : {},
     schedules: Array.isArray(o.schedules) ? o.schedules : seed.schedules,
-    runLogs: Array.isArray(o.runLogs) ? o.runLogs : [],
+    runLogs: Array.isArray(o.runLogs)
+      ? (o.runLogs as AppState["runLogs"]).map((r) => ({
+          ...r,
+          pipelineSnapshot:
+            "pipelineSnapshot" in (r as object) ? (r as { pipelineSnapshot?: unknown }).pipelineSnapshot : undefined,
+        }))
+      : [],
   };
 }
 

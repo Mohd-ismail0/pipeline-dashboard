@@ -14,6 +14,8 @@ export interface StoredDocument {
   createdAt: string;
   body: string;
   contentType: string;
+  /** Azure Blob path when body is stored remotely */
+  blobPath?: string | null;
 }
 
 export interface AppState {

@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Config {
+  id         String   @id
+  country    String
+  targetUrl  String   @map("target_url")
+  archetype  String
+  cron       String
+  status     String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  pipeline   Pipeline?
+  schedule   Schedule?
+  documents  Document[]
+  runs       Run[]
+}
+
+model Pipeline {
+  configId   String @id @map("config_id")
+  nodesEdges Json   @map("nodes_edges")
+  config     Config @relation(fields: [configId], references: [id], onDelete: Cascade)
+}
+
+model Schedule {
+  configId  String   @id @map("config_id")
+  cron      String
+  updatedAt DateTime @map("updated_at")
+  config    Config   @relation(fields: [configId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  configId    String   @map("config_id")
+  name        String
+  body        String   @db.Text
+  contentType String   @map("content_type")
+  createdAt   DateTime @default(now()) @map("created_at")
+  blobPath    String?  @map("blob_path")
+  config      Config   @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([configId])
+}
+
+model LastSnapshot {
+  configId String @id @map("config_id")
+  body     String @db.Text
+}
+
+model Run {
+  id               String     @id @default(uuid())
+  configId         String     @map("config_id")
+  triggerType      String     @map("trigger_type")
+  status           String     @default("completed")
+  startedAt        DateTime   @map("started_at")
+  endedAt          DateTime   @map("ended_at")
+  durationMs       Int        @map("duration_ms")
+  ok               Boolean
+  error            String?
+  orderedNodeIds   Json       @map("ordered_node_ids")
+  nodeResults      Json       @map("node_results")
+  documentId       String?    @map("document_id")
+  pipelineSnapshot Json?      @map("pipeline_snapshot")
+  config           Config     @relation(fields: [configId], references: [id], onDelete: Cascade)
+  events           RunEvent[]
+
+  @@index([configId, startedAt(sort: Desc)])
+}
+
+model RunEvent {
+  id        String   @id @default(uuid())
+  runId     String   @map("run_id")
+  seq       Int
+  type      String
+  nodeId    String?  @map("node_id")
+  payload   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  run       Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, seq])
+  @@index([runId])
+}
+
+model NodeCatalog {
+  id            String  @id @default(uuid())
+  handlerId     String  @map("handler_id")
+  version       String
+  displayName   String  @map("display_name")
+  category      String
+  inputSchema   Json    @map("input_schema")
+  outputSchema  Json?   @map("output_schema")
+  runtime       String
+  azureTarget   Json?   @map("azure_target")
+  capabilities  Json?
+
+  @@unique([handlerId, version])
+  @@index([handlerId])
+}

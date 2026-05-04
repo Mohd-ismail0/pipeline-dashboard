@@ -1,11 +1,14 @@
 import type { RunTriggerType } from "@/types/config";
 
+import { enqueueRunPipelineMessage } from "./runEnqueueService";
+
 export type QueueMessage = {
   type: "run-pipeline";
   configId: string;
   triggerType: RunTriggerType;
   enqueuedAt: string;
   scheduledAt?: string;
+  pipelineSnapshot?: unknown;
 };
 
 type Listener = (msg: QueueMessage) => void;
@@ -14,11 +17,20 @@ const listeners = new Set<Listener>();
 const deadLetter: QueueMessage[] = [];
 
 /**
- * Mock Azure Queue — in-process pub/sub + simple dequeue simulation.
+ * Run dispatch: optional Azure Storage Queue + in-process listeners (local dev).
  */
 export const queueService = {
   async enqueue(message: QueueMessage): Promise<void> {
-    listeners.forEach((l) => l(message));
+    const sent = await enqueueRunPipelineMessage({
+      kind: "RunPipeline",
+      configId: message.configId,
+      triggerType: message.triggerType,
+      enqueuedAt: message.enqueuedAt,
+      pipelineSnapshot: message.pipelineSnapshot,
+    });
+    if (!sent) {
+      listeners.forEach((l) => l(message));
+    }
   },
 
   subscribe(listener: Listener): () => void {
@@ -26,7 +38,6 @@ export const queueService = {
     return () => listeners.delete(listener);
   },
 
-  /** Simulated dequeue for observability / tests */
   async peekDeadLetter(): Promise<QueueMessage[]> {
     return [...deadLetter];
   },

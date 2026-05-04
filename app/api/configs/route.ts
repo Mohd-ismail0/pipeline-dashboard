@@ -6,7 +6,7 @@ import { z } from "zod";
 import { schedulerService } from "@/lib/services/schedulerService";
 import { ensureSchedulerBooted } from "@/lib/services/schedulerBootstrap";
 import { EMPTY_PIPELINE } from "@/lib/store/appState";
-import { readAppState, updateAppState } from "@/lib/store/jsonStore";
+import { readAppState, updateAppState } from "@/lib/store/appStore";
 import { isValidCron } from "@/lib/validateCron";
 import type { ScrapingConfig } from "@/types/config";
 

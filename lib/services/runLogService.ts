@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 
-import { readAppState, updateAppState } from "@/lib/store/jsonStore";
-import type { PipelineRunLog, RunTriggerType } from "@/types/config";
+import { readAppState, updateAppState } from "@/lib/store/appStore";
+import { runEventService } from "@/lib/services/runEventService";
+import type { PipelineRunLog, PipelineRunResult, RunTriggerType } from "@/types/config";
 
 export interface CreateRunLogInput {
   configId: string;
@@ -14,6 +15,8 @@ export interface CreateRunLogInput {
   orderedNodeIds: string[];
   nodeResults: PipelineRunLog["nodeResults"];
   documentId?: string;
+  pipelineSnapshot?: unknown;
+  finalOutput?: unknown;
 }
 
 export const runLogService = {
@@ -28,6 +31,18 @@ export const runLogService = {
       if (s.runLogs.length > 1000) {
         s.runLogs = s.runLogs.slice(0, 1000);
       }
+    });
+    const result: PipelineRunResult = {
+      configId: input.configId,
+      ok: input.ok,
+      orderedNodeIds: input.orderedNodeIds,
+      nodeResults: input.nodeResults,
+      finalOutput: input.finalOutput,
+    };
+    await runEventService.recordFromPipelineResult({
+      runId: log.id,
+      result,
+      log,
     });
     return log;
   },

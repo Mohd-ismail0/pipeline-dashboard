@@ -1,3 +1,5 @@
+import { allowInProcessScheduler } from "@/lib/env/execution";
+
 import { runPipelineForConfig } from "./pipelineRunner";
 import { queueService } from "./queueService";
 import { schedulerService } from "./schedulerService";
@@ -7,6 +9,7 @@ declare global {
 }
 
 export function ensureSchedulerBooted() {
+  if (!allowInProcessScheduler()) return;
   if (globalThis.__pipelineDashboardSchedulerBooted) return;
   globalThis.__pipelineDashboardSchedulerBooted = true;
 
