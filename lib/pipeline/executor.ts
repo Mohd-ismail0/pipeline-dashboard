@@ -1,6 +1,6 @@
 import type { PipelineRunResult, ScrapingConfig } from "@/types/config";
 import type { PipelinePersist, PipelineReactFlowNode } from "@/types/pipeline";
-import type { Edge, Node } from "@xyflow/react";
+import type { Node } from "@xyflow/react";
 
 import { nodeHandlers, type PipelineNode } from "./nodeHandlers";
 import { incomingMap, mergeUpstreamParts, topoSort } from "./topo";
@@ -77,7 +77,6 @@ export async function executePipeline(args: {
   for (const id of order) {
     const node = nodeById.get(id);
     if (!node) continue;
-    const handlerId = resolveHandlerId(node as PipelineNode);
     const parents = incoming.get(id) ?? [];
     const parts = parents.map((p) => outputs.get(p)).filter((v) => v !== undefined);
     const upstream = mergeUpstreamParts(parts);

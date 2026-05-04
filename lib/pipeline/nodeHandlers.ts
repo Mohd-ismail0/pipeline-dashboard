@@ -206,9 +206,11 @@ async function handleStorage(
 
 /** Placeholder: wire to Azure Python Function or Container Apps job. */
 async function handlePythonScrape(
-  _ctx: NodeHandlerContext,
-  _node: PipelineNode,
+  ctx: NodeHandlerContext,
+  node: PipelineNode,
 ): Promise<HandlerResult> {
+  void ctx;
+  void node;
   return {
     ok: true,
     output: {
@@ -221,9 +223,11 @@ async function handlePythonScrape(
 
 /** Placeholder: Playwright / browser workloads belong on Container Apps. */
 async function handleBrowserScrape(
-  _ctx: NodeHandlerContext,
-  _node: PipelineNode,
+  ctx: NodeHandlerContext,
+  node: PipelineNode,
 ): Promise<HandlerResult> {
+  void ctx;
+  void node;
   return {
     ok: true,
     output: {

@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 
 import {
   azureStorageConfigured,
+  localPipelineExecutionEnabled,
   remoteOrchestratorStartUrl,
-  useLocalExecutor,
 } from "@/lib/env/execution";
 import { runPipelineForConfig } from "@/lib/services/pipelineRunner";
 import { enqueueRunPipelineMessage } from "@/lib/services/runEnqueueService";
@@ -24,7 +24,11 @@ export async function POST(_req: Request, ctx: RouteParams) {
 
   const pipeline = state.pipelines[id] ?? EMPTY_PIPELINE;
 
-  if (!useLocalExecutor() && !remoteOrchestratorStartUrl() && azureStorageConfigured()) {
+  if (
+    !localPipelineExecutionEnabled() &&
+    !remoteOrchestratorStartUrl() &&
+    azureStorageConfigured()
+  ) {
     const enqueued = await enqueueRunPipelineMessage({
       kind: "RunPipeline",
       configId: id,

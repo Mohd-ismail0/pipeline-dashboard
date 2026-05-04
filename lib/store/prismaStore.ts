@@ -101,7 +101,7 @@ export async function readAppState(): Promise<AppState> {
     ok: r.ok,
     error: r.error ?? undefined,
     orderedNodeIds: r.orderedNodeIds as string[],
-    nodeResults: r.nodeResults as PipelineRunLog["nodeResults"],
+    nodeResults: r.nodeResults as unknown as PipelineRunLog["nodeResults"],
     documentId: r.documentId ?? undefined,
     pipelineSnapshot: r.pipelineSnapshot ?? undefined,
   }));
@@ -252,7 +252,9 @@ export async function writeAppState(state: AppState): Promise<void> {
           orderedNodeIds: r.orderedNodeIds,
           nodeResults: r.nodeResults as object,
           documentId: r.documentId ?? null,
-          pipelineSnapshot: (r.pipelineSnapshot ?? null) as object | null,
+          ...(r.pipelineSnapshot != null
+            ? { pipelineSnapshot: r.pipelineSnapshot as object }
+            : {}),
         },
         update: {
           triggerType: r.triggerType,
@@ -264,7 +266,9 @@ export async function writeAppState(state: AppState): Promise<void> {
           orderedNodeIds: r.orderedNodeIds,
           nodeResults: r.nodeResults as object,
           documentId: r.documentId ?? null,
-          pipelineSnapshot: (r.pipelineSnapshot ?? null) as object | null,
+          ...(r.pipelineSnapshot != null
+            ? { pipelineSnapshot: r.pipelineSnapshot as object }
+            : {}),
         },
       });
     }

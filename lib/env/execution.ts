@@ -1,7 +1,8 @@
 /**
  * Runtime flags for local vs Azure execution paths.
  */
-export function useLocalExecutor(): boolean {
+/** When false, prefer queue or `RUN_PIPELINE_ORCHESTRATION_URL` instead of in-process runner. */
+export function localPipelineExecutionEnabled(): boolean {
   return process.env.USE_LOCAL_EXECUTOR !== "false";
 }
 

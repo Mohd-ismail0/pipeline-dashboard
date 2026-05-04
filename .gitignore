@@ -42,3 +42,7 @@ next-env.d.ts
 
 # local JSON store (seeded on first run)
 /data/store.json
+
+# Azure Functions build output
+/azure-functions/dist/
+/azure-functions/node_modules/

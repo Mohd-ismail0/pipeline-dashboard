@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "azure-functions/dist/**",
+    "azure-functions/node_modules/**",
   ]),
 ]);
 
