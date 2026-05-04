@@ -6,6 +6,14 @@ export function localPipelineExecutionEnabled(): boolean {
   return process.env.USE_LOCAL_EXECUTOR !== "false";
 }
 
+/**
+ * Backward-compatible alias for older callsites during hot-reload / stale graph states.
+ * Remove once all imports are normalized to localPipelineExecutionEnabled.
+ */
+export function useLocalExecutor(): boolean {
+  return localPipelineExecutionEnabled();
+}
+
 /** When set, POST manual/cron runs to this durable HTTP starter URL (full URL). */
 export function remoteOrchestratorStartUrl(): string | undefined {
   const u = process.env.RUN_PIPELINE_ORCHESTRATION_URL?.trim();
