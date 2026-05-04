@@ -1,5 +1,4 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
-import * as df from "durable-functions";
 
 import { handleQueueMessage } from "./queueWorker";
 import { invokeCronTick } from "./timerWorker";
@@ -21,74 +20,23 @@ app.timer("pipelineCronTimer", {
   },
 });
 
-df.app.activity("ExecutePipelineHttp", {
-  handler: async (input: {
-    configId: string;
-    triggerType: "manual" | "cron";
-    startedAt: string;
-  }) => {
-    const base = process.env.APP_BASE_URL?.replace(/\/$/, "");
-    const secret = process.env.INTERNAL_API_SECRET;
-    if (!base || !secret) {
-      throw new Error("APP_BASE_URL and INTERNAL_API_SECRET must be set");
-    }
-    const res = await fetch(`${base}/api/internal/run-pipeline-sync`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-internal-secret": secret,
-      },
-      body: JSON.stringify({
-        configId: input.configId,
-        triggerType: input.triggerType,
-        startedAt: input.startedAt,
-      }),
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`run-pipeline-sync failed ${res.status}: ${text.slice(0, 500)}`);
-    }
-    return JSON.parse(text) as { result: unknown; logId: string };
-  },
-});
-
-const orchestrator: df.OrchestrationHandler = function* (context) {
-  const input = context.df.getInput() as {
-    configId: string;
-    triggerType: "manual" | "cron";
-    startedAt: string;
-  };
-  const out = yield context.df.callActivity("ExecutePipelineHttp", input);
-  return out;
-};
-
-df.app.orchestration("RunPipelineOrchestration", orchestrator);
-
-app.http("startRunPipeline", {
+/**
+ * Optional HTTP entry for Azure (or tests): same body as queue message.
+ * POST JSON { "configId": "...", "triggerType": "manual"|"cron" }
+ */
+app.http("runPipelineHttp", {
   methods: ["POST"],
   authLevel: "function",
-  route: "orchestrators/RunPipeline/start",
-  extraInputs: [df.input.durableClient()],
-  handler: async (
-    request: HttpRequest,
-    ctx: InvocationContext,
-    client: df.DurableClient,
-  ): Promise<HttpResponseInit> => {
-    let body: { configId?: string; triggerType?: "manual" | "cron"; startedAt?: string };
+  route: "run-pipeline",
+  handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+    const raw = await request.text();
     try {
-      body = (await request.json()) as typeof body;
-    } catch {
-      return { status: 400, jsonBody: { error: "Invalid JSON" } };
+      await handleQueueMessage(raw || "{}", context);
+      return { status: 200, jsonBody: { ok: true } };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "error";
+      context.log(`runPipelineHttp failed: ${msg}`);
+      return { status: 500, jsonBody: { error: msg } };
     }
-    if (!body.configId) {
-      return { status: 400, jsonBody: { error: "configId required" } };
-    }
-    const triggerType = body.triggerType ?? "manual";
-    const startedAt = body.startedAt ?? new Date().toISOString();
-    const instanceId = await client.startNew("RunPipelineOrchestration", {
-      input: { configId: body.configId, triggerType, startedAt },
-    });
-    const status = await client.waitForCompletionOrCreateCheckStatusResponse(request, instanceId);
-    return { status: status.status, jsonBody: await status.json() };
   },
 });
