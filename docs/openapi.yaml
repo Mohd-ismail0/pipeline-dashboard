@@ -1,0 +1,646 @@
+openapi: 3.1.0
+info:
+  title: Pipeline Dashboard API
+  version: 1.0.0
+  description: >
+    Operator and internal APIs for managing scraping configs, workflow pipelines,
+    runs, metrics, and artifacts.
+servers:
+  - url: http://localhost:3000
+    description: Local development
+tags:
+  - name: Operator
+    description: Dashboard and external automation APIs
+  - name: Internal
+    description: Worker/orchestrator APIs protected by internal secret
+components:
+  securitySchemes:
+    OperatorBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Token
+    InternalSecretHeader:
+      type: apiKey
+      in: header
+      name: x-internal-secret
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    ScrapingConfig:
+      type: object
+      properties:
+        id:
+          type: string
+        country:
+          type: string
+        target_url:
+          type: string
+        archetype:
+          type: string
+          enum: [static, spa, shadow_dom]
+        cron:
+          type: string
+        status:
+          type: string
+          enum: [Active, Paused, Error]
+      required: [id, country, target_url, archetype, cron, status]
+    PipelineNode:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        position:
+          type: object
+          properties:
+            x:
+              type: number
+            y:
+              type: number
+          required: [x, y]
+        data:
+          type: object
+          properties:
+            config:
+              type: object
+              additionalProperties: true
+            handlerId:
+              type: string
+            handlerVersion:
+              type: string
+            label:
+              type: string
+          required: [config]
+      required: [id, type, position, data]
+    PipelineEdge:
+      type: object
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+        target:
+          type: string
+      required: [source, target]
+    PipelinePersist:
+      type: object
+      properties:
+        version:
+          type: integer
+          enum: [1]
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/PipelineNode"
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/PipelineEdge"
+      required: [nodes, edges]
+    NodeRunResult:
+      type: object
+      properties:
+        nodeId:
+          type: string
+        type:
+          type: string
+        ok:
+          type: boolean
+        output: {}
+        error:
+          type: string
+      required: [nodeId, type, ok]
+    PipelineRunResult:
+      type: object
+      properties:
+        configId:
+          type: string
+        correlationId:
+          type: string
+        ok:
+          type: boolean
+        orderedNodeIds:
+          type: array
+          items:
+            type: string
+        nodeResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeRunResult"
+        finalOutput: {}
+      required: [configId, ok, orderedNodeIds, nodeResults]
+    PipelineRunLog:
+      type: object
+      properties:
+        id:
+          type: string
+        correlationId:
+          type: string
+        configId:
+          type: string
+        triggerType:
+          type: string
+          enum: [manual, cron]
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        durationMs:
+          type: integer
+        ok:
+          type: boolean
+        error:
+          type: string
+        orderedNodeIds:
+          type: array
+          items:
+            type: string
+        nodeResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeRunResult"
+        documentId:
+          type: string
+        pipelineSnapshot: {}
+      required:
+        - id
+        - configId
+        - triggerType
+        - startedAt
+        - endedAt
+        - durationMs
+        - ok
+        - orderedNodeIds
+        - nodeResults
+    RunEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        runId:
+          type: string
+        seq:
+          type: integer
+        type:
+          type: string
+          enum: [submit, completion, error, output]
+        nodeId:
+          type: string
+          nullable: true
+        payload: {}
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, runId, seq, type, createdAt]
+    NodeCatalogEntry:
+      type: object
+      properties:
+        handlerId:
+          type: string
+        version:
+          type: string
+        displayName:
+          type: string
+        category:
+          type: string
+        runtime:
+          type: string
+          enum: [inline_activity, azure_function, container_job, external_http]
+        inputSchema:
+          type: object
+          additionalProperties: true
+        outputSchema:
+          type: object
+          additionalProperties: true
+        azureTarget:
+          type: object
+          additionalProperties: true
+        capabilities:
+          type: object
+          additionalProperties: true
+      required: [handlerId, version, displayName, category, runtime, inputSchema]
+security:
+  - OperatorBearerAuth: []
+paths:
+  /api/configs:
+    get:
+      tags: [Operator]
+      summary: List configs
+      responses:
+        "200":
+          description: Config list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ScrapingConfig"
+    post:
+      tags: [Operator]
+      summary: Create config
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                country:
+                  type: string
+                target_url:
+                  type: string
+                archetype:
+                  type: string
+                  enum: [static, spa, shadow_dom]
+                cron:
+                  type: string
+                status:
+                  type: string
+                  enum: [Active, Paused, Error]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  config:
+                    $ref: "#/components/schemas/ScrapingConfig"
+        "400":
+          description: Validation failed
+        "409":
+          description: Duplicate id
+  /api/config/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Operator]
+      summary: Get config and pipeline
+      responses:
+        "200":
+          description: Config detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  config:
+                    $ref: "#/components/schemas/ScrapingConfig"
+                  pipeline:
+                    $ref: "#/components/schemas/PipelinePersist"
+        "404":
+          description: Not found
+    patch:
+      tags: [Operator]
+      summary: Update config and/or pipeline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                country:
+                  type: string
+                target_url:
+                  type: string
+                archetype:
+                  type: string
+                  enum: [static, spa, shadow_dom]
+                cron:
+                  type: string
+                status:
+                  type: string
+                  enum: [Active, Paused, Error]
+                pipeline:
+                  $ref: "#/components/schemas/PipelinePersist"
+      responses:
+        "200":
+          description: Updated
+        "400":
+          description: Invalid request
+        "404":
+          description: Not found
+    delete:
+      tags: [Operator]
+      summary: Delete config and related data
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+  /api/run/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [Operator]
+      summary: Trigger manual run
+      responses:
+        "200":
+          description: Executed immediately
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    $ref: "#/components/schemas/PipelineRunResult"
+                  logId:
+                    type: string
+        "202":
+          description: Accepted and queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted:
+                    type: boolean
+                  queued:
+                    type: boolean
+                  message:
+                    type: string
+  /api/runs:
+    get:
+      tags: [Operator]
+      summary: List runs
+      parameters:
+        - in: query
+          name: configId
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: triggerType
+          required: false
+          schema:
+            type: string
+            enum: [manual, cron]
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Run list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PipelineRunLog"
+  /api/runs/{runId}:
+    parameters:
+      - in: path
+        name: runId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Operator]
+      summary: Get run and events
+      responses:
+        "200":
+          description: Run detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run:
+                    $ref: "#/components/schemas/PipelineRunLog"
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RunEvent"
+        "404":
+          description: Not found
+  /api/runs/{runId}/stream:
+    parameters:
+      - in: path
+        name: runId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Operator]
+      summary: Stream run events via SSE
+      responses:
+        "200":
+          description: text/event-stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "404":
+          description: Not found
+  /api/metrics:
+    get:
+      tags: [Operator]
+      summary: Get run metrics
+      responses:
+        "200":
+          description: Metrics
+  /api/node-catalog:
+    get:
+      tags: [Operator]
+      summary: List available node types
+      responses:
+        "200":
+          description: Node catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NodeCatalogEntry"
+  /api/documents/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Operator]
+      summary: List documents for config
+      responses:
+        "200":
+          description: Document list
+  /api/documents/{id}/download/{docId}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      - in: path
+        name: docId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Operator]
+      summary: Download document body
+      responses:
+        "200":
+          description: File body
+        "404":
+          description: Not found
+  /api/diff/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Operator]
+      summary: Get previous/current content for diff
+      responses:
+        "200":
+          description: Diff payload
+  /api/internal/cron-tick:
+    post:
+      tags: [Internal]
+      summary: Evaluate cron schedules and enqueue due runs
+      security:
+        - InternalSecretHeader: []
+      responses:
+        "200":
+          description: Tick completed
+  /api/internal/run-pipeline-sync:
+    post:
+      tags: [Internal]
+      summary: Run full pipeline synchronously
+      security:
+        - InternalSecretHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                correlationId:
+                  type: string
+                configId:
+                  type: string
+                triggerType:
+                  type: string
+                  enum: [manual, cron]
+                startedAt:
+                  type: string
+                  format: date-time
+              required: [configId, triggerType]
+      responses:
+        "200":
+          description: Run completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    $ref: "#/components/schemas/PipelineRunResult"
+                  logId:
+                    type: string
+  /api/internal/execute-node:
+    post:
+      tags: [Internal]
+      summary: Execute single node
+      security:
+        - InternalSecretHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config:
+                  $ref: "#/components/schemas/ScrapingConfig"
+                node:
+                  $ref: "#/components/schemas/PipelineNode"
+                upstream: {}
+              required: [config, node]
+      responses:
+        "200":
+          description: Node result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeRunResult"
+  /api/internal/pipeline-complete:
+    post:
+      tags: [Internal]
+      summary: Persist externally orchestrated run completion
+      security:
+        - InternalSecretHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                correlationId:
+                  type: string
+                configId:
+                  type: string
+                triggerType:
+                  type: string
+                  enum: [manual, cron]
+                startedAt:
+                  type: string
+                  format: date-time
+                result:
+                  $ref: "#/components/schemas/PipelineRunResult"
+                pipelineSnapshot:
+                  $ref: "#/components/schemas/PipelinePersist"
+              required: [configId, triggerType, startedAt, result]
+      responses:
+        "200":
+          description: Completion persisted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  logId:
+                    type: string

@@ -2,6 +2,8 @@
 
 This playbook is for autonomous agents operating this pipeline system through APIs.
 
+Deployment and runtime setup reference: `docs/deployment-guide.md`.
+
 ## Objective
 
 Safely manage configs, workflows, and run operations without direct DB writes or filesystem edits.

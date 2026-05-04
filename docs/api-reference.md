@@ -2,6 +2,8 @@
 
 This document describes all API endpoints available in this project, including operator-facing APIs and internal worker APIs.
 
+Machine-readable contract: `docs/openapi.yaml` (OpenAPI 3.1).
+
 ## Base URL
 
 - Local: `http://localhost:3000`

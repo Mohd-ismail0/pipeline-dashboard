@@ -26,6 +26,10 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 - API reference (all routes, auth, payloads):
   - `docs/api-reference.md`
+- OpenAPI 3.1 spec:
+  - `docs/openapi.yaml`
+- Deployment guide (Azure):
+  - `docs/deployment-guide.md`
 - AI agent operational guide:
   - `docs/ai-agent-playbook.md`
 - Pipeline builder UX guide:
