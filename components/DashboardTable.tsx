@@ -328,6 +328,7 @@ export function DashboardTable({
       </div>
       <div className="ag-theme-quartz min-h-0 flex-1 rounded-md border">
         <AgGridReact<ScrapingConfig>
+          theme="legacy"
           rowData={configs}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
