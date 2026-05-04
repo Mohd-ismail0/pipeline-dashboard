@@ -24,6 +24,8 @@ type DocItem = {
   name: string;
   createdAt: string;
   downloadUrl: string;
+  runId: string | null;
+  triggerType: "manual" | "cron" | null;
 };
 
 export function DocumentsPanel(props: {
@@ -100,6 +102,11 @@ export function DocumentsPanel(props: {
                         <div className="text-muted-foreground text-[10px]">
                           {new Date(d.createdAt).toLocaleString()}
                         </div>
+                        {d.runId ? (
+                          <div className="text-muted-foreground font-mono text-[10px]">
+                            run: {d.runId.slice(0, 8)} · {d.triggerType}
+                          </div>
+                        ) : null}
                       </div>
                       <a
                         href={d.downloadUrl}

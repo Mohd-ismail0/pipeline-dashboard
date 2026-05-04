@@ -2,6 +2,8 @@ export type ConfigStatus = "Active" | "Paused" | "Error";
 
 export type Archetype = "static" | "spa" | "shadow_dom";
 
+export type RunTriggerType = "manual" | "cron";
+
 export interface ScrapingConfig {
   id: string;
   country: string;
@@ -17,7 +19,6 @@ export interface ExecutionInput {
 
 export interface ExecutionContext {
   input: ExecutionInput;
-  /** Accumulated named outputs (optional extension point) */
   output: Record<string, unknown>;
 }
 
@@ -35,4 +36,18 @@ export interface PipelineRunResult {
   orderedNodeIds: string[];
   nodeResults: NodeRunResult[];
   finalOutput?: unknown;
+}
+
+export interface PipelineRunLog {
+  id: string;
+  configId: string;
+  triggerType: RunTriggerType;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  ok: boolean;
+  error?: string;
+  orderedNodeIds: string[];
+  nodeResults: NodeRunResult[];
+  documentId?: string;
 }

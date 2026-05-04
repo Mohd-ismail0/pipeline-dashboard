@@ -1,7 +1,11 @@
+import type { RunTriggerType } from "@/types/config";
+
 export type QueueMessage = {
   type: "run-pipeline";
   configId: string;
+  triggerType: RunTriggerType;
   enqueuedAt: string;
+  scheduledAt?: string;
 };
 
 type Listener = (msg: QueueMessage) => void;

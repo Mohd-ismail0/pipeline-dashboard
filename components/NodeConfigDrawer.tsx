@@ -73,6 +73,11 @@ export function NodeConfigDrawer(props: {
     props.onOpenChange(false);
   };
 
+  const hasRequiredErrors =
+    (type === "http" && !String(draft.url ?? "").trim()) ||
+    (type === "extract" && !String(draft.selector ?? "").trim()) ||
+    (type === "storage" && !String(draft.container ?? "").trim());
+
   return (
     <Drawer open={props.open} onOpenChange={props.onOpenChange} direction="right">
       <DrawerContent className="data-[vaul-drawer-direction=right]:sm:max-w-md">
@@ -110,6 +115,9 @@ export function NodeConfigDrawer(props: {
                   onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
                   placeholder="{{target_url}}"
                 />
+                <p className="text-muted-foreground text-[11px]">
+                  Supports template variable <code>{"{{target_url}}"}</code>.
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label>Headers (JSON)</Label>
@@ -219,6 +227,9 @@ export function NodeConfigDrawer(props: {
                   </div>
                 </div>
               ) : null}
+              <p className="text-muted-foreground text-[11px]">
+                Use regex replace carefully; invalid patterns fail node execution.
+              </p>
             </>
           ) : null}
 
@@ -280,7 +291,13 @@ export function NodeConfigDrawer(props: {
               Cancel
             </Button>
           </DrawerClose>
-          <Button type="button" size="sm" className="h-8" onClick={apply}>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8"
+            onClick={apply}
+            disabled={hasRequiredErrors}
+          >
             Apply
           </Button>
         </DrawerFooter>

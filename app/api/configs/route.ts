@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { schedulerService } from "@/lib/services/schedulerService";
+import { ensureSchedulerBooted } from "@/lib/services/schedulerBootstrap";
 import { EMPTY_PIPELINE } from "@/lib/store/appState";
 import { readAppState, updateAppState } from "@/lib/store/jsonStore";
 import { isValidCron } from "@/lib/validateCron";
@@ -21,11 +22,13 @@ const createSchema = z
   .strict();
 
 export async function GET() {
+  ensureSchedulerBooted();
   const state = await readAppState();
   return NextResponse.json({ configs: state.configs });
 }
 
 export async function POST(req: Request) {
+  ensureSchedulerBooted();
   let body: unknown;
   try {
     body = await req.json();

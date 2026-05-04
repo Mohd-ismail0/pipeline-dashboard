@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { normalizePipeline } from "@/lib/pipeline/normalizePipeline";
 import { schedulerService } from "@/lib/services/schedulerService";
+import { ensureSchedulerBooted } from "@/lib/services/schedulerBootstrap";
 import { EMPTY_PIPELINE } from "@/lib/store/appState";
 import { readAppState, updateAppState } from "@/lib/store/jsonStore";
 import { isValidCron } from "@/lib/validateCron";
@@ -27,6 +29,7 @@ const patchSchema = z
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: RouteParams) {
+  ensureSchedulerBooted();
   const { id } = await ctx.params;
   const state = await readAppState();
   const config = state.configs.find((c) => c.id === id);
@@ -38,6 +41,7 @@ export async function GET(_req: Request, ctx: RouteParams) {
 }
 
 export async function PATCH(req: Request, ctx: RouteParams) {
+  ensureSchedulerBooted();
   const { id } = await ctx.params;
   let body: unknown;
   try {
@@ -81,10 +85,10 @@ export async function PATCH(req: Request, ctx: RouteParams) {
     s.configs[idx] = merged;
 
     if (patch.pipeline) {
-      s.pipelines[id] = {
-        nodes: patch.pipeline.nodes as PipelinePersist["nodes"],
-        edges: patch.pipeline.edges as PipelinePersist["edges"],
-      };
+      s.pipelines[id] = normalizePipeline({
+        nodes: patch.pipeline.nodes,
+        edges: patch.pipeline.edges,
+      }) as PipelinePersist;
     }
   });
 
@@ -102,6 +106,7 @@ export async function PATCH(req: Request, ctx: RouteParams) {
 }
 
 export async function DELETE(_req: Request, ctx: RouteParams) {
+  ensureSchedulerBooted();
   const { id } = await ctx.params;
   const before = await readAppState();
   if (!before.configs.some((c) => c.id === id)) {
@@ -113,6 +118,7 @@ export async function DELETE(_req: Request, ctx: RouteParams) {
     delete s.pipelines[id];
     s.documents = s.documents.filter((d) => d.configId !== id);
     s.schedules = s.schedules.filter((x) => x.configId !== id);
+    s.runLogs = s.runLogs.filter((x) => x.configId !== id);
     delete s.lastSnapshots[id];
   });
 

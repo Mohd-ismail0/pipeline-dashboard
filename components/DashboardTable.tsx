@@ -116,6 +116,7 @@ export function DashboardTable({
   onViewDiff,
   onAddRow,
   onRowSelected,
+  onRunFinished,
 }: {
   configs: ScrapingConfig[];
   loading: boolean;
@@ -125,6 +126,7 @@ export function DashboardTable({
   onViewDiff: (id: string) => void;
   onAddRow: () => Promise<void>;
   onRowSelected?: (id: string | null) => void;
+  onRunFinished?: () => void;
 }) {
   const [gridError, setGridError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -184,13 +186,14 @@ export function DashboardTable({
           throw new Error(j.error ?? res.statusText);
         }
         await onRefresh();
+        onRunFinished?.();
       } catch (e: unknown) {
         setGridError(e instanceof Error ? e.message : "Run failed");
       } finally {
         setBusyId(null);
       }
     },
-    [onRefresh],
+    [onRefresh, onRunFinished],
   );
 
   const onDelete = useCallback(

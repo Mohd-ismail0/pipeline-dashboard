@@ -20,6 +20,7 @@ function normalizeAppState(parsed: unknown): AppState {
         ? o.lastSnapshots
         : {},
     schedules: Array.isArray(o.schedules) ? o.schedules : seed.schedules,
+    runLogs: Array.isArray(o.runLogs) ? o.runLogs : [],
   };
 }
 

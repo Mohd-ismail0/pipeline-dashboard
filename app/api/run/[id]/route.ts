@@ -1,42 +1,43 @@
 import { NextResponse } from "next/server";
 
-import { executePipeline } from "@/lib/pipeline/executor";
+import { runPipelineForConfig } from "@/lib/services/pipelineRunner";
 import { queueService } from "@/lib/services/queueService";
-import { EMPTY_PIPELINE } from "@/lib/store/appState";
+import { ensureSchedulerBooted } from "@/lib/services/schedulerBootstrap";
 import { readAppState, updateAppState } from "@/lib/store/jsonStore";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function POST(_req: Request, ctx: RouteParams) {
+  ensureSchedulerBooted();
   const { id } = await ctx.params;
   const state = await readAppState();
-  const config = state.configs.find((c) => c.id === id);
-  if (!config) {
+  if (!state.configs.some((c) => c.id === id)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   await queueService.enqueue({
     type: "run-pipeline",
     configId: id,
+    triggerType: "manual",
     enqueuedAt: new Date().toISOString(),
   });
 
-  const pipeline = state.pipelines[id] ?? EMPTY_PIPELINE;
-  const result = await executePipeline({ config, pipeline });
-
-  if (!result.ok) {
-    await updateAppState((s) => {
-      const idx = s.configs.findIndex((c) => c.id === id);
-      if (idx >= 0) s.configs[idx] = { ...s.configs[idx]!, status: "Error" };
+  try {
+    const { result, logId } = await runPipelineForConfig({
+      configId: id,
+      triggerType: "manual",
     });
-  } else {
+    return NextResponse.json({ result, logId });
+  } catch (error) {
     await updateAppState((s) => {
       const idx = s.configs.findIndex((c) => c.id === id);
-      if (idx >= 0 && s.configs[idx]!.status === "Error") {
-        s.configs[idx] = { ...s.configs[idx]!, status: "Active" };
+      if (idx >= 0) {
+        s.configs[idx] = { ...s.configs[idx], status: "Error" };
       }
     });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Run failed" },
+      { status: 500 },
+    );
   }
-
-  return NextResponse.json({ result });
 }

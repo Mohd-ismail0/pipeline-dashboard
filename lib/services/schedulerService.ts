@@ -1,10 +1,53 @@
+import { CronExpressionParser } from "cron-parser";
+
 import type { ScheduleRegistration } from "@/lib/store/appState";
 import { readAppState, updateAppState } from "@/lib/store/jsonStore";
 import type { ScrapingConfig } from "@/types/config";
 
+import { queueService } from "./queueService";
+
 /**
- * Mock scheduler — persists registrations; no real timers (Azure Timer/Functions later).
+ * Mock scheduler — persists registrations and simulates due cron ticks.
  */
+const lastEvaluated = new Map<string, number>();
+
+let intervalRef: ReturnType<typeof setInterval> | null = null;
+let running = false;
+
+async function tickScheduler() {
+  if (running) return;
+  running = true;
+  try {
+    const now = Date.now();
+    const state = await readAppState();
+    for (const schedule of state.schedules) {
+      const config = state.configs.find((c) => c.id === schedule.configId);
+      if (!config || config.status !== "Active") continue;
+      const last = lastEvaluated.get(schedule.configId) ?? now - 30_000;
+      try {
+        const expression = CronExpressionParser.parse(schedule.cron, {
+          currentDate: new Date(last),
+        });
+        const nextAt = expression.next().toDate().getTime();
+        if (nextAt <= now) {
+          await queueService.enqueue({
+            type: "run-pipeline",
+            configId: schedule.configId,
+            triggerType: "cron",
+            enqueuedAt: new Date().toISOString(),
+            scheduledAt: new Date(nextAt).toISOString(),
+          });
+        }
+      } catch {
+        // ignore invalid schedule at runtime; cron validation already happens on write
+      }
+      lastEvaluated.set(schedule.configId, now);
+    }
+  } finally {
+    running = false;
+  }
+}
+
 export const schedulerService = {
   async upsertFromConfig(config: ScrapingConfig): Promise<ScheduleRegistration> {
     const reg: ScheduleRegistration = {
@@ -23,5 +66,12 @@ export const schedulerService = {
   async list(): Promise<ScheduleRegistration[]> {
     const s = await readAppState();
     return s.schedules;
+  },
+
+  start() {
+    if (intervalRef) return;
+    intervalRef = setInterval(() => {
+      void tickScheduler();
+    }, 15_000);
   },
 };

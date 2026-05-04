@@ -1,4 +1,4 @@
-import type { ScrapingConfig } from "@/types/config";
+import type { PipelineRunLog, ScrapingConfig } from "@/types/config";
 import type { PipelinePersist } from "@/types/pipeline";
 
 export interface ScheduleRegistration {
@@ -12,7 +12,6 @@ export interface StoredDocument {
   configId: string;
   name: string;
   createdAt: string;
-  /** Raw body for downloads / diff (mock blob) */
   body: string;
   contentType: string;
 }
@@ -21,9 +20,9 @@ export interface AppState {
   configs: ScrapingConfig[];
   pipelines: Record<string, PipelinePersist>;
   documents: StoredDocument[];
-  /** Last successful scrape snapshot per config (for diff node baseline) */
   lastSnapshots: Record<string, string>;
   schedules: ScheduleRegistration[];
+  runLogs: PipelineRunLog[];
 }
 
 export const EMPTY_PIPELINE: PipelinePersist = {
@@ -133,5 +132,6 @@ export function createSeedState(): AppState {
         updatedAt: new Date().toISOString(),
       },
     ],
+    runLogs: [],
   };
 }

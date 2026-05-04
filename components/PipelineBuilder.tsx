@@ -23,6 +23,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { NodeConfigDrawer } from "@/components/NodeConfigDrawer";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -69,6 +70,7 @@ const NODE_TYPES: PipelineNodeType[] = [
 
 function BuilderInner(props: {
   configId: string;
+  configLabel: string;
   initialPipeline: PipelinePersist;
   onSave: (p: PipelinePersist) => Promise<void>;
 }) {
@@ -76,6 +78,9 @@ function BuilderInner(props: {
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
   const [selected, setSelected] = useState<RFNode | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
   const skipNextSave = useRef(true);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rfInstance = useRef<ReactFlowInstance<RFNode, Edge> | null>(null);
@@ -108,10 +113,16 @@ function BuilderInner(props: {
   }, [props.configId, props.initialPipeline, setEdges, setNodes]);
 
   const flushSave = useCallback(async () => {
-    await props.onSave({
-      nodes: nodesRef.current as PipelinePersist["nodes"],
-      edges: edgesRef.current,
-    });
+    setSaveState("saving");
+    try {
+      await props.onSave({
+        nodes: nodesRef.current as PipelinePersist["nodes"],
+        edges: edgesRef.current,
+      });
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    }
   }, [props]);
 
   const scheduleSave = useCallback(() => {
@@ -207,8 +218,78 @@ function BuilderInner(props: {
     [scheduleSave, setNodes],
   );
 
+  const validationErrors = useMemo(() => {
+    const errs: string[] = [];
+    if (nodes.length === 0) {
+      errs.push("Pipeline has no nodes.");
+    }
+    const inCount = new Map<string, number>();
+    for (const n of nodes) inCount.set(n.id, 0);
+    for (const e of edges) {
+      inCount.set(e.target, (inCount.get(e.target) ?? 0) + 1);
+    }
+    const roots = nodes.filter((n) => (inCount.get(n.id) ?? 0) === 0);
+    if (roots.length === 0 && nodes.length > 0) {
+      errs.push("Pipeline has no root node (cycle suspected).");
+    }
+    for (const n of nodes) {
+      const cfg = n.data?.config ?? {};
+      if (n.type === "http" && !String(cfg.url ?? "").trim()) {
+        errs.push(`HTTP node ${n.id} requires URL.`);
+      }
+      if (n.type === "extract" && !String(cfg.selector ?? "").trim()) {
+        errs.push(`Extract node ${n.id} requires selector.`);
+      }
+      if (n.type === "storage" && !String(cfg.container ?? "").trim()) {
+        errs.push(`Storage node ${n.id} requires container.`);
+      }
+    }
+    return errs;
+  }, [edges, nodes]);
+
+  const validatePipeline = useCallback(() => validationErrors.length === 0, [validationErrors]);
+
   return (
     <>
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-muted-foreground text-xs">
+          Config: <span className="font-mono">{props.configId}</span> ·{" "}
+          <span className="font-medium">{props.configLabel}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground text-[11px]">
+            {saveState === "saving"
+              ? "Saving..."
+              : saveState === "saved"
+                ? "Saved"
+                : saveState === "error"
+                  ? "Save failed"
+                  : "Autosave"}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => {
+              if (!validatePipeline()) return;
+              void flushSave();
+            }}
+          >
+            Save now
+          </Button>
+        </div>
+      </div>
+      {validationErrors.length > 0 ? (
+        <Alert variant="destructive" className="mb-2">
+          <AlertTitle>Pipeline validation</AlertTitle>
+          <AlertDescription className="space-y-1">
+            {validationErrors.map((e) => (
+              <div key={e}>{e}</div>
+            ))}
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <div className="flex h-[min(560px,calc(100vh-220px))] min-h-[420px] gap-2">
         <Card className="flex w-40 shrink-0 flex-col gap-1 p-2">
           <p className="text-muted-foreground px-1 text-[10px] font-medium tracking-wide uppercase">
@@ -267,6 +348,7 @@ function BuilderInner(props: {
 
 export function PipelineBuilder(props: {
   configId: string;
+  configLabel: string;
   initialPipeline: PipelinePersist;
   onSave: (p: PipelinePersist) => Promise<void>;
 }) {
@@ -275,6 +357,7 @@ export function PipelineBuilder(props: {
       <BuilderInner
         key={props.configId}
         configId={props.configId}
+        configLabel={props.configLabel}
         initialPipeline={props.initialPipeline}
         onSave={props.onSave}
       />

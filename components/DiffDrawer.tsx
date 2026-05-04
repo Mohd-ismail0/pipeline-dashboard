@@ -12,6 +12,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { PipelineRunLog } from "@/types/config";
 
 const ReactDiffViewer = dynamic(
   () =>
@@ -31,6 +32,7 @@ export function DiffDrawer(props: {
   const [current, setCurrent] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [runs, setRuns] = useState<PipelineRunLog[]>([]);
 
   useEffect(() => {
     if (!props.open || !props.configId) return;
@@ -48,6 +50,7 @@ export function DiffDrawer(props: {
         if (!cancelled) {
           setPrevious(j.previous ?? "");
           setCurrent(j.current ?? "");
+          setRuns((j as { runs?: PipelineRunLog[] }).runs ?? []);
         }
       } catch (e: unknown) {
         if (!cancelled) setErr(e instanceof Error ? e.message : "Failed to load diff");
@@ -76,6 +79,11 @@ export function DiffDrawer(props: {
           </DrawerDescription>
         </DrawerHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-4 pb-6">
+          {runs.length > 0 ? (
+            <p className="text-muted-foreground text-xs">
+              Comparing run {runs[1]?.id?.slice(0, 8) ?? "n/a"} to {runs[0]?.id?.slice(0, 8) ?? "n/a"}
+            </p>
+          ) : null}
           {err ? (
             <Alert variant="destructive">
               <AlertTitle>Error</AlertTitle>

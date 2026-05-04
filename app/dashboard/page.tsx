@@ -14,9 +14,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { ScrapingConfig } from "@/types/config";
+import type { PipelineRunLog, ScrapingConfig } from "@/types/config";
 import type { PipelinePersist } from "@/types/pipeline";
 import { FileStack } from "lucide-react";
 
@@ -32,6 +33,20 @@ export default function DashboardPage() {
   const [diffOpen, setDiffOpen] = useState(false);
   const [diffId, setDiffId] = useState<string | null>(null);
   const [docsOpen, setDocsOpen] = useState(false);
+  const [metrics, setMetrics] = useState<{
+    totalCronRuns: number;
+    cronSuccess: number;
+    cronFailed: number;
+    manualRuns: number;
+    lastRunAt: string | null;
+  }>({
+    totalCronRuns: 0,
+    cronSuccess: 0,
+    cronFailed: 0,
+    manualRuns: 0,
+    lastRunAt: null,
+  });
+  const [recentRuns, setRecentRuns] = useState<PipelineRunLog[]>([]);
 
   const loadConfigs = useCallback(async () => {
     setLoading(true);
@@ -57,6 +72,39 @@ export default function DashboardPage() {
       await loadConfigs();
     })();
   }, [loadConfigs]);
+
+  const refreshObservability = useCallback(async () => {
+    const [mRes, rRes] = await Promise.all([
+      fetch("/api/metrics"),
+      fetch("/api/runs?limit=8"),
+    ]);
+    if (mRes.ok) {
+      setMetrics(
+        (await mRes.json()) as {
+          totalCronRuns: number;
+          cronSuccess: number;
+          cronFailed: number;
+          manualRuns: number;
+          lastRunAt: string | null;
+        },
+      );
+    }
+    if (rRes.ok) {
+      const data = (await rRes.json()) as { runs: PipelineRunLog[] };
+      setRecentRuns(data.runs ?? []);
+    }
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      await Promise.resolve();
+      await refreshObservability();
+    })();
+    const id = setInterval(() => {
+      void refreshObservability();
+    }, 4000);
+    return () => clearInterval(id);
+  }, [refreshObservability]);
 
   useEffect(() => {
     void (async () => {
@@ -143,6 +191,46 @@ export default function DashboardPage() {
             </TabsTrigger>
           </TabsList>
           <Separator />
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <Card className="py-3">
+              <CardHeader className="px-3 pb-1">
+                <CardDescription className="text-[10px]">
+                  Total cron runs
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="px-3 pt-0">
+                <div className="text-lg font-semibold">{metrics.totalCronRuns}</div>
+              </CardContent>
+            </Card>
+            <Card className="py-3">
+              <CardHeader className="px-3 pb-1">
+                <CardDescription className="text-[10px]">Cron success</CardDescription>
+              </CardHeader>
+              <CardContent className="px-3 pt-0">
+                <div className="text-lg font-semibold">{metrics.cronSuccess}</div>
+              </CardContent>
+            </Card>
+            <Card className="py-3">
+              <CardHeader className="px-3 pb-1">
+                <CardDescription className="text-[10px]">Cron failed</CardDescription>
+              </CardHeader>
+              <CardContent className="px-3 pt-0">
+                <div className="text-lg font-semibold">{metrics.cronFailed}</div>
+              </CardContent>
+            </Card>
+            <Card className="py-3">
+              <CardHeader className="px-3 pb-1">
+                <CardDescription className="text-[10px]">Last run</CardDescription>
+              </CardHeader>
+              <CardContent className="px-3 pt-0">
+                <div className="text-xs font-medium">
+                  {metrics.lastRunAt
+                    ? new Date(metrics.lastRunAt).toLocaleString()
+                    : "No runs"}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
           <TabsContent value="configs" className="mt-0 min-h-0 flex-1">
             <Card className="flex h-full min-h-[480px] flex-col py-0">
               <CardHeader className="shrink-0 border-b py-3">
@@ -167,7 +255,45 @@ export default function DashboardPage() {
                     setDiffOpen(true);
                   }}
                   onAddRow={onAddRow}
+                  onRunFinished={() => {
+                    void refreshObservability();
+                  }}
                 />
+                <Card className="mt-2 py-0">
+                  <CardHeader className="border-b py-2">
+                    <CardTitle className="text-xs">Recent runs</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 p-2">
+                    {recentRuns.length === 0 ? (
+                      <p className="text-muted-foreground text-xs">No execution logs yet.</p>
+                    ) : (
+                      recentRuns.map((run) => (
+                        <div
+                          key={run.id}
+                          className="flex items-center justify-between rounded border px-2 py-1"
+                        >
+                          <div className="min-w-0">
+                            <div className="font-mono text-[10px]">{run.configId}</div>
+                            <div className="text-muted-foreground text-[10px]">
+                              {new Date(run.startedAt).toLocaleString()}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Badge variant="outline" className="h-5 text-[10px]">
+                              {run.triggerType}
+                            </Badge>
+                            <Badge
+                              variant={run.ok ? "default" : "destructive"}
+                              className="h-5 text-[10px]"
+                            >
+                              {run.ok ? "ok" : "failed"}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
               </CardContent>
             </Card>
           </TabsContent>
@@ -183,6 +309,9 @@ export default function DashboardPage() {
                 {selectedId ? (
                   <PipelineBuilder
                     configId={selectedId}
+                    configLabel={
+                      configs.find((c) => c.id === selectedId)?.target_url ?? selectedId
+                    }
                     initialPipeline={pipeline}
                     onSave={savePipeline}
                   />
