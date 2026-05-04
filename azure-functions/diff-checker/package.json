@@ -1,0 +1,15 @@
+{
+  "name": "diff-checker-function",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Azure Functions service for comparing two scraped structures.",
+  "main": "src/functions/*.js",
+  "scripts": {
+    "start": "func start",
+    "test": "node src/diffEngine.test.js"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.7.0"
+  },
+  "devDependencies": {}
+}
