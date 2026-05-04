@@ -73,7 +73,14 @@ export async function executePipeline(args: {
       configId: config.id,
       ok: false,
       orderedNodeIds: [],
-      nodeResults: [],
+      nodeResults: [
+        {
+          nodeId: "__pipeline__",
+          type: "error",
+          ok: false,
+          error,
+        },
+      ],
       finalOutput: undefined,
     };
   }

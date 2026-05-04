@@ -4,6 +4,25 @@ import path from "path";
 import type { AppState } from "./appState";
 import { createSeedState } from "./appState";
 
+function normalizeAppState(parsed: unknown): AppState {
+  const seed = createSeedState();
+  if (!parsed || typeof parsed !== "object") return seed;
+  const o = parsed as Partial<AppState>;
+  return {
+    configs: Array.isArray(o.configs) && o.configs.length ? o.configs : seed.configs,
+    pipelines:
+      o.pipelines && typeof o.pipelines === "object"
+        ? (o.pipelines as AppState["pipelines"])
+        : seed.pipelines,
+    documents: Array.isArray(o.documents) ? o.documents : [],
+    lastSnapshots:
+      o.lastSnapshots && typeof o.lastSnapshots === "object"
+        ? o.lastSnapshots
+        : {},
+    schedules: Array.isArray(o.schedules) ? o.schedules : seed.schedules,
+  };
+}
+
 const DATA_DIR = path.join(process.cwd(), "data");
 const STORE_PATH = path.join(DATA_DIR, "store.json");
 
@@ -20,7 +39,7 @@ async function ensureDataDir() {
 export async function readAppState(): Promise<AppState> {
   try {
     const raw = await readFile(STORE_PATH, "utf-8");
-    return JSON.parse(raw) as AppState;
+    return normalizeAppState(JSON.parse(raw));
   } catch {
     const seed = createSeedState();
     await ensureDataDir();
