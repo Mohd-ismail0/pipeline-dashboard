@@ -17,6 +17,7 @@ export interface PipelineNodePayload extends Record<string, unknown> {
   config: Record<string, unknown>;
   handlerId?: string;
   handlerVersion?: string;
+  label?: string;
 }
 
 export type PipelineReactFlowNode = Node<PipelineNodePayload, string>;

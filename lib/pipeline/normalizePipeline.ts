@@ -12,6 +12,7 @@ function cleanNode(node: UnknownNode): PipelineReactFlowNode {
   const handlerId = typeof rawData.handlerId === "string" ? rawData.handlerId : undefined;
   const handlerVersion =
     typeof rawData.handlerVersion === "string" ? rawData.handlerVersion : undefined;
+  const label = typeof rawData.label === "string" ? rawData.label : undefined;
   const rfType = String(node.type ?? "http");
   return {
     id: String(node.id ?? ""),
@@ -23,6 +24,7 @@ function cleanNode(node: UnknownNode): PipelineReactFlowNode {
     data: {
       config,
       ...(handlerId ? { handlerId, handlerVersion } : {}),
+      ...(label ? { label } : {}),
     },
   };
 }

@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { PipelineNodeType, PipelineReactFlowNode } from "@/types/pipeline";
+import { defaultConfigForHandlerId } from "@/lib/defaultNodeConfig";
+import type { PipelineReactFlowNode } from "@/types/pipeline";
 
 function headersToText(h: unknown): string {
   if (typeof h === "string") return h;
@@ -37,13 +38,27 @@ export function NodeConfigDrawer(props: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   node: PipelineReactFlowNode | null;
-  onApply: (nodeId: string, config: Record<string, unknown>) => void;
+  availableHandlers: { id: string; label: string }[];
+  onApply: (
+    nodeId: string,
+    patch: {
+      config: Record<string, unknown>;
+      handlerId: string;
+      handlerVersion?: string;
+      label?: string;
+      nodeType: string;
+    },
+  ) => void;
+  onDuplicateNode: (nodeId: string) => void;
+  onDeleteNode: (nodeId: string) => void;
 }) {
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [headersStr, setHeadersStr] = useState("{}");
   const [headersError, setHeadersError] = useState<string | null>(null);
   const [argsStr, setArgsStr] = useState("{}");
   const [argsError, setArgsError] = useState<string | null>(null);
+  const [handlerIdDraft, setHandlerIdDraft] = useState("http");
+  const [labelDraft, setLabelDraft] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -55,26 +70,32 @@ export function NodeConfigDrawer(props: {
         setHeadersError(null);
         setArgsStr(JSON.stringify(c.args ?? {}, null, 2));
         setArgsError(null);
+        const hid =
+          (typeof props.node.data?.handlerId === "string" && props.node.data.handlerId) ||
+          props.node.type;
+        setHandlerIdDraft(hid);
+        setLabelDraft(
+          typeof props.node.data?.label === "string"
+            ? props.node.data.label
+            : `${String(hid).replaceAll("_", " ")}`,
+        );
       } else {
         setDraft({});
         setHeadersStr("{}");
         setHeadersError(null);
         setArgsStr("{}");
         setArgsError(null);
+        setHandlerIdDraft("http");
+        setLabelDraft("");
       }
     })();
   }, [props.node]);
 
   if (!props.node) return null;
 
-  const effective =
-    (typeof props.node.data?.handlerId === "string" && props.node.data.handlerId) ||
-    props.node.type;
-  const type = effective as PipelineNodeType | string;
-
   const apply = () => {
     let next = { ...draft };
-    if (type === "http" || type === "external_api_scrape") {
+    if (handlerIdDraft === "http" || handlerIdDraft === "external_api_scrape") {
       try {
         next = { ...next, headers: JSON.parse(headersStr || "{}") as Record<string, string> };
       } catch {
@@ -82,15 +103,33 @@ export function NodeConfigDrawer(props: {
         return;
       }
     }
-    props.onApply(props.node!.id, next);
+    if (handlerIdDraft === "python_scrape") {
+      try {
+        next = { ...next, args: JSON.parse(argsStr || "{}") as Record<string, unknown> };
+      } catch {
+        setArgsError("Args must be valid JSON");
+        return;
+      }
+    }
+    const initialHandler =
+      (typeof props.node?.data?.handlerId === "string" && props.node.data.handlerId) || props.node?.type;
+    const config = handlerIdDraft !== initialHandler ? defaultConfigForHandlerId(handlerIdDraft) : next;
+    props.onApply(props.node!.id, {
+      config,
+      handlerId: handlerIdDraft,
+      handlerVersion: "1.0.0",
+      label: labelDraft.trim() || undefined,
+      nodeType: handlerIdDraft,
+    });
     props.onOpenChange(false);
   };
 
   const hasRequiredErrors =
-    ((type === "http" || type === "external_api_scrape") && !String(draft.url ?? "").trim()) ||
-    (type === "extract" && !String(draft.selector ?? "").trim()) ||
-    (type === "storage" && !String(draft.container ?? "").trim()) ||
-    (type === "python_scrape" && !String(draft.entrypoint ?? "").trim()) ||
+    ((handlerIdDraft === "http" || handlerIdDraft === "external_api_scrape") &&
+      !String(draft.url ?? "").trim()) ||
+    (handlerIdDraft === "extract" && !String(draft.selector ?? "").trim()) ||
+    (handlerIdDraft === "storage" && !String(draft.container ?? "").trim()) ||
+    (handlerIdDraft === "python_scrape" && !String(draft.entrypoint ?? "").trim()) ||
     Boolean(headersError) ||
     Boolean(argsError);
 
@@ -99,12 +138,48 @@ export function NodeConfigDrawer(props: {
       <DrawerContent className="data-[vaul-drawer-direction=right]:sm:max-w-md">
         <DrawerHeader>
           <DrawerTitle className="font-mono text-sm">
-            {String(type).toUpperCase()}
+            {String(handlerIdDraft).toUpperCase()}
           </DrawerTitle>
           <DrawerDescription>Node {props.node.id}</DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-4">
-          {type === "http" || type === "external_api_scrape" ? (
+          <div className="grid gap-2">
+            <Label>Node label</Label>
+            <Input
+              className="h-8"
+              value={labelDraft}
+              onChange={(e) => setLabelDraft(e.target.value)}
+              placeholder="Readable node label"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label>Node type</Label>
+            <Select
+              value={handlerIdDraft}
+              onValueChange={(nextHandlerId) => {
+                if (!nextHandlerId) return;
+                setHandlerIdDraft(nextHandlerId);
+                const defaults = defaultConfigForHandlerId(nextHandlerId);
+                setDraft(defaults);
+                setHeadersStr(headersToText(defaults.headers));
+                setHeadersError(null);
+                setArgsStr(JSON.stringify(defaults.args ?? {}, null, 2));
+                setArgsError(null);
+              }}
+            >
+              <SelectTrigger className="h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {props.availableHandlers.map((h) => (
+                  <SelectItem key={h.id} value={h.id}>
+                    {h.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {handlerIdDraft === "http" || handlerIdDraft === "external_api_scrape" ? (
             <>
               <div className="grid gap-2">
                 <Label>Method</Label>
@@ -158,7 +233,7 @@ export function NodeConfigDrawer(props: {
             </>
           ) : null}
 
-          {type === "extract" ? (
+          {handlerIdDraft === "extract" ? (
             <>
               <div className="grid gap-2">
                 <Label>Selector (CSS)</Label>
@@ -189,7 +264,7 @@ export function NodeConfigDrawer(props: {
             </>
           ) : null}
 
-          {type === "transform" ? (
+          {handlerIdDraft === "transform" ? (
             <>
               <div className="grid gap-2">
                 <Label>Operation</Label>
@@ -261,7 +336,7 @@ export function NodeConfigDrawer(props: {
             </>
           ) : null}
 
-          {type === "diff" ? (
+          {handlerIdDraft === "diff" ? (
             <div className="grid gap-2">
               <Label>Strategy</Label>
               <Select
@@ -281,7 +356,7 @@ export function NodeConfigDrawer(props: {
             </div>
           ) : null}
 
-          {type === "python_scrape" ? (
+          {handlerIdDraft === "python_scrape" ? (
             <>
               <div className="grid gap-2">
                 <Label>Entrypoint</Label>
@@ -315,7 +390,7 @@ export function NodeConfigDrawer(props: {
             </>
           ) : null}
 
-          {type === "browser_scrape" ? (
+          {handlerIdDraft === "browser_scrape" ? (
             <>
               <div className="grid gap-2">
                 <Label>URL template</Label>
@@ -337,7 +412,7 @@ export function NodeConfigDrawer(props: {
             </>
           ) : null}
 
-          {type === "js_script" ? (
+          {handlerIdDraft === "js_script" ? (
             <>
               <div className="grid gap-2">
                 <Label>Mode</Label>
@@ -366,7 +441,7 @@ export function NodeConfigDrawer(props: {
             </>
           ) : null}
 
-          {type === "storage" ? (
+          {handlerIdDraft === "storage" ? (
             <>
               <div className="grid gap-2">
                 <Label>Container name</Label>
@@ -399,6 +474,27 @@ export function NodeConfigDrawer(props: {
           ) : null}
         </div>
         <DrawerFooter className="flex-row justify-end gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-8"
+            onClick={() => props.onDuplicateNode(props.node!.id)}
+          >
+            Duplicate
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            className="h-8"
+            onClick={() => {
+              props.onDeleteNode(props.node!.id);
+              props.onOpenChange(false);
+            }}
+          >
+            Delete
+          </Button>
           <DrawerClose asChild>
             <Button type="button" variant="outline" size="sm" className="h-8">
               Cancel
