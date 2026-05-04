@@ -1,3 +1,4 @@
+import { localPipelineExecutionEnabled } from "@/lib/env/execution";
 import type { RunTriggerType } from "@/types/config";
 
 import { enqueueRunPipelineMessage } from "./runEnqueueService";
@@ -21,14 +22,16 @@ const deadLetter: QueueMessage[] = [];
  */
 export const queueService = {
   async enqueue(message: QueueMessage): Promise<void> {
-    const sent = await enqueueRunPipelineMessage({
-      kind: "RunPipeline",
-      configId: message.configId,
-      triggerType: message.triggerType,
-      enqueuedAt: message.enqueuedAt,
-      pipelineSnapshot: message.pipelineSnapshot,
-    });
-    if (!sent) {
+    const useAzure =
+      !localPipelineExecutionEnabled() &&
+      (await enqueueRunPipelineMessage({
+        kind: "RunPipeline",
+        configId: message.configId,
+        triggerType: message.triggerType,
+        enqueuedAt: message.enqueuedAt,
+        pipelineSnapshot: message.pipelineSnapshot,
+      }));
+    if (!useAzure) {
       listeners.forEach((l) => l(message));
     }
   },
