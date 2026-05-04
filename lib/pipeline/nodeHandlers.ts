@@ -245,6 +245,13 @@ async function handleJsScript(
   const c = asRecord(node.data?.config);
   const mode = String(c.mode ?? "stub");
   if (mode === "eval_upstream") {
+    if (process.env.ALLOW_UNSAFE_JS_SCRIPT_EVAL !== "true") {
+      return {
+        ok: false,
+        error:
+          "js_script eval_upstream is disabled. Set ALLOW_UNSAFE_JS_SCRIPT_EVAL=true only in isolated environments.",
+      };
+    }
     try {
       const fn = new Function("upstream", "config", `return (${String(c.expression ?? "null")});`);
       const out = fn(ctx.upstream, ctx.config);

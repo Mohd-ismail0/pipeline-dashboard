@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { requireOperatorAuth } from "@/lib/auth/apiAuth";
 import { schedulerService } from "@/lib/services/schedulerService";
 import { ensureSchedulerBooted } from "@/lib/services/schedulerBootstrap";
 import { EMPTY_PIPELINE } from "@/lib/store/appState";
@@ -21,13 +22,17 @@ const createSchema = z
   })
   .strict();
 
-export async function GET() {
+export async function GET(req: Request) {
+  const deny = requireOperatorAuth(req);
+  if (deny) return deny;
   ensureSchedulerBooted();
   const state = await readAppState();
   return NextResponse.json({ configs: state.configs });
 }
 
 export async function POST(req: Request) {
+  const deny = requireOperatorAuth(req);
+  if (deny) return deny;
   ensureSchedulerBooted();
   let body: unknown;
   try {

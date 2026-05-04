@@ -5,6 +5,7 @@ import { runEventService } from "@/lib/services/runEventService";
 import type { PipelineRunLog, PipelineRunResult, RunTriggerType } from "@/types/config";
 
 export interface CreateRunLogInput {
+  correlationId?: string;
   configId: string;
   triggerType: RunTriggerType;
   startedAt: string;
@@ -35,6 +36,7 @@ export const runLogService = {
     });
     const result: PipelineRunResult = {
       configId: input.configId,
+      correlationId: input.correlationId,
       ok: input.ok,
       orderedNodeIds: input.orderedNodeIds,
       nodeResults: input.nodeResults,

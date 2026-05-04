@@ -1,3 +1,4 @@
+import { requireOperatorAuth } from "@/lib/auth/apiAuth";
 import { runEventService } from "@/lib/services/runEventService";
 import { readAppState } from "@/lib/store/appStore";
 
@@ -7,6 +8,8 @@ type RouteParams = { params: Promise<{ runId: string }> };
 
 /** SSE: emits new run events as they appear (polls Prisma every 2s). */
 export async function GET(req: Request, ctx: RouteParams) {
+  const deny = requireOperatorAuth(req);
+  if (deny) return deny;
   const { runId } = await ctx.params;
   const state = await readAppState();
   const log = state.runLogs.find((r) => r.id === runId);

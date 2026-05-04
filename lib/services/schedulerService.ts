@@ -1,4 +1,5 @@
 import { CronExpressionParser } from "cron-parser";
+import { randomUUID } from "crypto";
 
 import type { ScheduleRegistration } from "@/lib/store/appState";
 import { allowInProcessScheduler } from "@/lib/env/execution";
@@ -39,6 +40,8 @@ async function tickScheduler() {
           const pipeline = state.pipelines[schedule.configId];
           await queueService.enqueue({
             type: "run-pipeline",
+            idempotencyKey: `cron:${schedule.configId}:${nextAt}`,
+            correlationId: randomUUID(),
             configId: schedule.configId,
             triggerType: "cron",
             enqueuedAt: new Date().toISOString(),

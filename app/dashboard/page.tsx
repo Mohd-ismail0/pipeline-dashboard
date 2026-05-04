@@ -47,6 +47,11 @@ export default function DashboardPage() {
     lastRunAt: null,
   });
   const [recentRuns, setRecentRuns] = useState<PipelineRunLog[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRunEvents, setSelectedRunEvents] = useState<
+    { seq: number; type: string; nodeId: string | null; createdAt: string }[]
+  >([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const loadConfigs = useCallback(async () => {
     setLoading(true);
@@ -74,6 +79,9 @@ export default function DashboardPage() {
   }, [loadConfigs]);
 
   const refreshObservability = useCallback(async () => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      return;
+    }
     const [mRes, rRes] = await Promise.all([
       fetch("/api/metrics"),
       fetch("/api/runs?limit=8"),
@@ -117,14 +125,36 @@ export default function DashboardPage() {
     })();
   }, [selectedId, loadDetail]);
 
+  useEffect(() => {
+    if (!selectedRunId) {
+      return;
+    }
+    void fetch(`/api/runs/${encodeURIComponent(selectedRunId)}`)
+      .then((r) => r.json())
+      .then((d: { events?: { seq: number; type: string; nodeId: string | null; createdAt: string }[] }) =>
+        setSelectedRunEvents(d.events ?? []),
+      )
+      .catch(() => setSelectedRunEvents([]));
+  }, [selectedRunId]);
+
   const savePipeline = useCallback(
     async (p: PipelinePersist) => {
       if (!selectedId) return;
-      await fetch(`/api/config/${encodeURIComponent(selectedId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pipeline: p }),
-      });
+      try {
+        const res = await fetch(`/api/config/${encodeURIComponent(selectedId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pipeline: p }),
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(body.error ?? `Save failed with status ${res.status}`);
+        }
+        setSaveError(null);
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : "Save failed");
+        throw error;
+      }
     },
     [selectedId],
   );
@@ -220,17 +250,20 @@ export default function DashboardPage() {
             </Card>
             <Card className="py-3">
               <CardHeader className="px-3 pb-1">
-                <CardDescription className="text-[10px]">Last run</CardDescription>
+                <CardDescription className="text-[10px]">Manual runs</CardDescription>
               </CardHeader>
               <CardContent className="px-3 pt-0">
-                <div className="text-xs font-medium">
-                  {metrics.lastRunAt
-                    ? new Date(metrics.lastRunAt).toLocaleString()
-                    : "No runs"}
-                </div>
+                <div className="text-lg font-semibold">{metrics.manualRuns}</div>
               </CardContent>
             </Card>
           </div>
+          {saveError ? (
+            <Card className="border-destructive/40 py-2">
+              <CardContent className="px-3 py-1 text-xs text-red-600 dark:text-red-400">
+                {saveError}
+              </CardContent>
+            </Card>
+          ) : null}
           <TabsContent value="configs" className="mt-0 min-h-0 flex-1">
             <Card className="flex h-full min-h-[480px] flex-col py-0">
               <CardHeader className="shrink-0 border-b py-3">
@@ -270,7 +303,8 @@ export default function DashboardPage() {
                       recentRuns.map((run) => (
                         <div
                           key={run.id}
-                          className="flex items-center justify-between rounded border px-2 py-1"
+                          className="flex cursor-pointer items-center justify-between rounded border px-2 py-1"
+                          onClick={() => setSelectedRunId(run.id)}
                         >
                           <div className="min-w-0">
                             <div className="font-mono text-[10px]">{run.configId}</div>
@@ -292,6 +326,24 @@ export default function DashboardPage() {
                         </div>
                       ))
                     )}
+                    {selectedRunId ? (
+                      <div className="mt-2 rounded border p-2">
+                        <div className="mb-1 text-[11px] font-semibold">Run timeline</div>
+                        <div className="max-h-32 space-y-1 overflow-auto">
+                          {selectedRunEvents.length === 0 ? (
+                            <p className="text-muted-foreground text-[11px]">No events.</p>
+                          ) : (
+                            selectedRunEvents.map((e) => (
+                              <div key={`${e.seq}-${e.createdAt}`} className="text-[11px]">
+                                <span className="font-mono">#{e.seq}</span> {e.type}
+                                {e.nodeId ? ` · ${e.nodeId}` : ""} ·{" "}
+                                {new Date(e.createdAt).toLocaleTimeString()}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
                   </CardContent>
                 </Card>
               </CardContent>

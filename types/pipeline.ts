@@ -28,6 +28,7 @@ export interface PipelineEdgePersist {
 }
 
 export interface PipelinePersist {
+  version?: 1;
   nodes: PipelineReactFlowNode[];
   edges: Edge[];
 }

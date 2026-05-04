@@ -41,6 +41,9 @@ export function NodeConfigDrawer(props: {
 }) {
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [headersStr, setHeadersStr] = useState("{}");
+  const [headersError, setHeadersError] = useState<string | null>(null);
+  const [argsStr, setArgsStr] = useState("{}");
+  const [argsError, setArgsError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -49,9 +52,15 @@ export function NodeConfigDrawer(props: {
         const c = { ...(props.node.data?.config ?? {}) };
         setDraft(c);
         setHeadersStr(headersToText(c.headers));
+        setHeadersError(null);
+        setArgsStr(JSON.stringify(c.args ?? {}, null, 2));
+        setArgsError(null);
       } else {
         setDraft({});
         setHeadersStr("{}");
+        setHeadersError(null);
+        setArgsStr("{}");
+        setArgsError(null);
       }
     })();
   }, [props.node]);
@@ -69,7 +78,8 @@ export function NodeConfigDrawer(props: {
       try {
         next = { ...next, headers: JSON.parse(headersStr || "{}") as Record<string, string> };
       } catch {
-        next = { ...next, headers: {} };
+        setHeadersError("Headers must be valid JSON");
+        return;
       }
     }
     props.onApply(props.node!.id, next);
@@ -80,7 +90,9 @@ export function NodeConfigDrawer(props: {
     ((type === "http" || type === "external_api_scrape") && !String(draft.url ?? "").trim()) ||
     (type === "extract" && !String(draft.selector ?? "").trim()) ||
     (type === "storage" && !String(draft.container ?? "").trim()) ||
-    (type === "python_scrape" && !String(draft.entrypoint ?? "").trim());
+    (type === "python_scrape" && !String(draft.entrypoint ?? "").trim()) ||
+    Boolean(headersError) ||
+    Boolean(argsError);
 
   return (
     <Drawer open={props.open} onOpenChange={props.onOpenChange} direction="right">
@@ -128,8 +140,20 @@ export function NodeConfigDrawer(props: {
                 <Textarea
                   className="min-h-[120px] font-mono text-xs"
                   value={headersStr}
-                  onChange={(e) => setHeadersStr(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setHeadersStr(v);
+                    try {
+                      JSON.parse(v || "{}");
+                      setHeadersError(null);
+                    } catch {
+                      setHeadersError("Headers must be valid JSON");
+                    }
+                  }}
                 />
+                {headersError ? (
+                  <p className="text-[11px] text-red-600 dark:text-red-400">{headersError}</p>
+                ) : null}
               </div>
             </>
           ) : null}
@@ -272,15 +296,21 @@ export function NodeConfigDrawer(props: {
                 <Label>Args (JSON)</Label>
                 <Textarea
                   className="min-h-[80px] font-mono text-xs"
-                  value={JSON.stringify(draft.args ?? {}, null, 2)}
+                  value={argsStr}
                   onChange={(e) => {
+                    const v = e.target.value;
+                    setArgsStr(v);
                     try {
-                      setDraft((d) => ({ ...d, args: JSON.parse(e.target.value) as object }));
+                      setDraft((d) => ({ ...d, args: JSON.parse(v) as object }));
+                      setArgsError(null);
                     } catch {
-                      /* ignore */
+                      setArgsError("Args must be valid JSON");
                     }
                   }}
                 />
+                {argsError ? (
+                  <p className="text-[11px] text-red-600 dark:text-red-400">{argsError}</p>
+                ) : null}
               </div>
             </>
           ) : null}

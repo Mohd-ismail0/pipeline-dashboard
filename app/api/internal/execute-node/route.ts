@@ -1,27 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { requireInternalAuth } from "@/lib/auth/apiAuth";
 import { executeSingleNode } from "@/lib/pipeline/executor";
-import type { ScrapingConfig } from "@/types/config";
-import type { PipelineReactFlowNode } from "@/types/pipeline";
+import { configSchema, pipelineNodeSchema } from "@/types/contracts";
 
 const bodySchema = z.object({
-  config: z.custom<ScrapingConfig>(),
-  node: z.custom<PipelineReactFlowNode>(),
+  config: configSchema,
+  node: pipelineNodeSchema,
   upstream: z.unknown().optional(),
 });
 
-function authorize(req: Request) {
-  const expected = process.env.INTERNAL_API_SECRET?.trim();
-  const got =
-    req.headers.get("x-internal-secret")?.trim() ?? new URL(req.url).searchParams.get("secret");
-  return Boolean(expected && got === expected);
-}
-
 export async function POST(req: Request) {
-  if (!authorize(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const deny = requireInternalAuth(req);
+  if (deny) return deny;
   let body: unknown;
   try {
     body = await req.json();

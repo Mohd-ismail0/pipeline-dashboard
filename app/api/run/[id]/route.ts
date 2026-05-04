@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireOperatorAuth } from "@/lib/auth/apiAuth";
 import {
   azureStorageConfigured,
   localPipelineExecutionEnabled,
@@ -7,7 +8,6 @@ import {
 } from "@/lib/env/execution";
 import { runPipelineForConfig } from "@/lib/services/pipelineRunner";
 import { enqueueRunPipelineMessage } from "@/lib/services/runEnqueueService";
-import { queueService } from "@/lib/services/queueService";
 import { ensureSchedulerBooted } from "@/lib/services/schedulerBootstrap";
 import { EMPTY_PIPELINE } from "@/lib/store/appState";
 import { readAppState, updateAppState } from "@/lib/store/appStore";
@@ -15,6 +15,8 @@ import { readAppState, updateAppState } from "@/lib/store/appStore";
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function POST(_req: Request, ctx: RouteParams) {
+  const deny = requireOperatorAuth(_req);
+  if (deny) return deny;
   ensureSchedulerBooted();
   const { id } = await ctx.params;
   const state = await readAppState();
@@ -24,38 +26,32 @@ export async function POST(_req: Request, ctx: RouteParams) {
 
   const pipeline = state.pipelines[id] ?? EMPTY_PIPELINE;
 
-  if (
-    !localPipelineExecutionEnabled() &&
-    !remoteOrchestratorStartUrl() &&
-    azureStorageConfigured()
-  ) {
+  if (!localPipelineExecutionEnabled()) {
+    const correlationId = crypto.randomUUID();
+    const idempotencyKey = `manual:${id}:${new Date().toISOString().slice(0, 16)}`;
     const enqueued = await enqueueRunPipelineMessage({
       kind: "RunPipeline",
+      correlationId,
+      idempotencyKey,
       configId: id,
       triggerType: "manual",
       enqueuedAt: new Date().toISOString(),
       pipelineSnapshot: pipeline,
     });
-    if (enqueued) {
+    if (enqueued || azureStorageConfigured() || remoteOrchestratorStartUrl()) {
       return NextResponse.json(
-        { accepted: true, queued: true, message: "Run enqueued on Azure Storage Queue" },
+        { accepted: true, queued: true, message: "Run enqueued for orchestrator" },
         { status: 202 },
       );
     }
   }
 
-  await queueService.enqueue({
-    type: "run-pipeline",
-    configId: id,
-    triggerType: "manual",
-    enqueuedAt: new Date().toISOString(),
-    pipelineSnapshot: pipeline,
-  });
-
   try {
+    const correlationId = crypto.randomUUID();
     const { result, logId } = await runPipelineForConfig({
       configId: id,
       triggerType: "manual",
+      correlationId,
     });
     return NextResponse.json({ result, logId });
   } catch (error) {

@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { requireOperatorAuth } from "@/lib/auth/apiAuth";
 import { runLogService } from "@/lib/services/runLogService";
 import { ensureSchedulerBooted } from "@/lib/services/schedulerBootstrap";
 import type { RunTriggerType } from "@/types/config";
 
 export async function GET(req: Request) {
+  const deny = requireOperatorAuth(req);
+  if (deny) return deny;
   ensureSchedulerBooted();
   const { searchParams } = new URL(req.url);
   const configId = searchParams.get("configId") || undefined;

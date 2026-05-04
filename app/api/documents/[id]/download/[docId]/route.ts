@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireOperatorAuth } from "@/lib/auth/apiAuth";
 import { blobService } from "@/lib/services/blobService";
 
 type RouteParams = {
@@ -7,6 +8,8 @@ type RouteParams = {
 };
 
 export async function GET(_req: Request, ctx: RouteParams) {
+  const deny = requireOperatorAuth(_req);
+  if (deny) return deny;
   const { id, docId } = await ctx.params;
   const doc = await blobService.getById(docId);
   if (!doc || doc.configId !== id) {

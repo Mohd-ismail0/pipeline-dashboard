@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { requireOperatorAuth } from "@/lib/auth/apiAuth";
 import { normalizePipeline } from "@/lib/pipeline/normalizePipeline";
 import { schedulerService } from "@/lib/services/schedulerService";
 import { ensureSchedulerBooted } from "@/lib/services/schedulerBootstrap";
@@ -29,6 +30,8 @@ const patchSchema = z
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: RouteParams) {
+  const deny = requireOperatorAuth(_req);
+  if (deny) return deny;
   ensureSchedulerBooted();
   const { id } = await ctx.params;
   const state = await readAppState();
@@ -41,6 +44,8 @@ export async function GET(_req: Request, ctx: RouteParams) {
 }
 
 export async function PATCH(req: Request, ctx: RouteParams) {
+  const deny = requireOperatorAuth(req);
+  if (deny) return deny;
   ensureSchedulerBooted();
   const { id } = await ctx.params;
   let body: unknown;
@@ -106,6 +111,8 @@ export async function PATCH(req: Request, ctx: RouteParams) {
 }
 
 export async function DELETE(_req: Request, ctx: RouteParams) {
+  const deny = requireOperatorAuth(_req);
+  if (deny) return deny;
   ensureSchedulerBooted();
   const { id } = await ctx.params;
   const before = await readAppState();

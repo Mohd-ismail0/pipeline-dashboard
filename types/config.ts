@@ -32,6 +32,7 @@ export interface NodeRunResult {
 
 export interface PipelineRunResult {
   configId: string;
+  correlationId?: string;
   ok: boolean;
   orderedNodeIds: string[];
   nodeResults: NodeRunResult[];
@@ -40,6 +41,7 @@ export interface PipelineRunResult {
 
 export interface PipelineRunLog {
   id: string;
+  correlationId?: string;
   configId: string;
   triggerType: RunTriggerType;
   startedAt: string;

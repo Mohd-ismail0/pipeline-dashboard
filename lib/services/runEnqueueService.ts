@@ -16,6 +16,8 @@ function getQueueClient(): QueueClient | null {
 
 export type RunQueueMessage = {
   kind: "RunPipeline";
+  idempotencyKey: string;
+  correlationId?: string;
   configId: string;
   triggerType: "manual" | "cron";
   enqueuedAt: string;

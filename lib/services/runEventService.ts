@@ -13,6 +13,10 @@ export interface RunEventRecord {
   createdAt: string;
 }
 
+function eventPayload(base: Record<string, unknown>, correlationId?: string) {
+  return correlationId ? { correlationId, ...base } : base;
+}
+
 export const runEventService = {
   async listByRunId(runId: string): Promise<RunEventRecord[]> {
     if (!isPrismaEnabled()) return [];
@@ -47,21 +51,30 @@ export const runEventService = {
       seq: seq++,
       type: "submit",
       nodeId: null,
-      payload: { triggerType: log.triggerType, orderedNodeIds: result.orderedNodeIds },
+      payload: eventPayload(
+        { triggerType: log.triggerType, orderedNodeIds: result.orderedNodeIds },
+        log.correlationId,
+      ),
     });
     for (const nr of result.nodeResults) {
       events.push({
         seq: seq++,
         type: nr.ok ? "completion" : "error",
         nodeId: nr.nodeId,
-        payload: nr.ok ? { output: nr.output } : { error: nr.error },
+        payload: eventPayload(
+          nr.ok ? { output: nr.output } : { error: nr.error },
+          log.correlationId,
+        ),
       });
     }
     events.push({
       seq: seq++,
       type: "output",
       nodeId: null,
-      payload: { ok: result.ok, finalOutput: result.finalOutput },
+      payload: eventPayload(
+        { ok: result.ok, finalOutput: result.finalOutput },
+        log.correlationId,
+      ),
     });
     await prisma.runEvent.deleteMany({ where: { runId } });
     await prisma.runEvent.createMany({

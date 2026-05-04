@@ -19,13 +19,14 @@ function pickDocumentId(result: PipelineRunResult): string | undefined {
 
 /** Persist run outcome + config status + run log + optional fal-style events (Prisma). */
 export async function persistPipelineRun(args: {
+  correlationId?: string;
   configId: string;
   triggerType: RunTriggerType;
   startedAt: string;
   result: PipelineRunResult;
   pipelineSnapshot?: PipelinePersist;
 }): Promise<{ logId: string }> {
-  const { configId, triggerType, startedAt, result, pipelineSnapshot } = args;
+  const { correlationId, configId, triggerType, startedAt, result, pipelineSnapshot } = args;
   const endedAt = new Date().toISOString();
   const durationMs = Date.now() - new Date(startedAt).getTime();
 
@@ -42,6 +43,7 @@ export async function persistPipelineRun(args: {
   });
 
   const log = await runLogService.append({
+    correlationId,
     configId,
     triggerType,
     startedAt,
@@ -62,6 +64,7 @@ export async function persistPipelineRun(args: {
 export async function runPipelineForConfig(args: {
   configId: string;
   triggerType: RunTriggerType;
+  correlationId?: string;
 }): Promise<{ result: PipelineRunResult; logId: string }> {
   const start = Date.now();
   const startedAt = new Date(start).toISOString();
@@ -84,6 +87,7 @@ export async function runPipelineForConfig(args: {
         configId: args.configId,
         triggerType: args.triggerType,
         startedAt,
+        correlationId: args.correlationId,
       }),
     });
     if (!res.ok) {
@@ -96,6 +100,7 @@ export async function runPipelineForConfig(args: {
 
   const result = await executePipeline({ config, pipeline });
   const { logId } = await persistPipelineRun({
+    correlationId: args.correlationId,
     configId: args.configId,
     triggerType: args.triggerType,
     startedAt,

@@ -5,6 +5,8 @@ import { enqueueRunPipelineMessage } from "./runEnqueueService";
 
 export type QueueMessage = {
   type: "run-pipeline";
+  idempotencyKey?: string;
+  correlationId?: string;
   configId: string;
   triggerType: RunTriggerType;
   enqueuedAt: string;
@@ -26,6 +28,10 @@ export const queueService = {
       !localPipelineExecutionEnabled() &&
       (await enqueueRunPipelineMessage({
         kind: "RunPipeline",
+        idempotencyKey:
+          message.idempotencyKey ??
+          `${message.triggerType}:${message.configId}:${message.scheduledAt ?? message.enqueuedAt}`,
+        correlationId: message.correlationId,
         configId: message.configId,
         triggerType: message.triggerType,
         enqueuedAt: message.enqueuedAt,

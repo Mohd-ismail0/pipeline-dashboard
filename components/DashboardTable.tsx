@@ -198,6 +198,11 @@ export function DashboardTable({
 
   const onDelete = useCallback(
     async (id: string) => {
+      const yes =
+        typeof window === "undefined"
+          ? true
+          : window.confirm("Delete this config and all associated pipeline data?");
+      if (!yes) return;
       setBusyId(id);
       setGridError(null);
       try {

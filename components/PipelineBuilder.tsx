@@ -86,6 +86,7 @@ function BuilderInner(props: {
   const rfInstance = useRef<ReactFlowInstance<RFNode, Edge> | null>(null);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
+  const validationErrorsRef = useRef<string[]>([]);
   useEffect(() => {
     nodesRef.current = nodes;
     edgesRef.current = edges;
@@ -135,6 +136,10 @@ function BuilderInner(props: {
 
   const scheduleSave = useCallback(() => {
     if (skipNextSave.current) return;
+    if (validationErrorsRef.current.length > 0) {
+      setSaveState("error");
+      return;
+    }
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null;
@@ -259,6 +264,9 @@ function BuilderInner(props: {
   }, [edges, nodes]);
 
   const validatePipeline = useCallback(() => validationErrors.length === 0, [validationErrors]);
+  useEffect(() => {
+    validationErrorsRef.current = validationErrors;
+  }, [validationErrors]);
 
   return (
     <>
