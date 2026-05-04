@@ -1,4 +1,10 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Pipeline Dashboard
+
+Frontend + API control plane for a backend scraping workflow system.
+
+- Dashboard edits configs and pipeline graphs.
+- Backend APIs persist state, trigger runs, stream run events, and serve artifacts.
+- Execution can run locally or via Azure queue/orchestrator workers.
 
 ## Getting Started
 
@@ -16,27 +22,41 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Pipeline Builder UX
+## Documentation
 
-For pipeline editing behaviors (node rename/type switching/duplicate/delete and connection management), see:
+- API reference (all routes, auth, payloads):
+  - `docs/api-reference.md`
+- AI agent operational guide:
+  - `docs/ai-agent-playbook.md`
+- Pipeline builder UX guide:
+  - `docs/pipeline-builder-ux.md`
 
-- `docs/pipeline-builder-ux.md`
+## API Summary
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Operator APIs:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `GET/POST /api/configs`
+- `GET/PATCH/DELETE /api/config/:id`
+- `POST /api/run/:id`
+- `GET /api/runs`
+- `GET /api/runs/:runId`
+- `GET /api/runs/:runId/stream` (SSE)
+- `GET /api/metrics`
+- `GET /api/node-catalog`
+- `GET /api/documents/:id`
+- `GET /api/documents/:id/download/:docId`
+- `GET /api/diff/:id`
 
-## Learn More
+Internal APIs:
 
-To learn more about Next.js, take a look at the following resources:
+- `POST /api/internal/cron-tick`
+- `POST /api/internal/run-pipeline-sync`
+- `POST /api/internal/execute-node`
+- `POST /api/internal/pipeline-complete`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Auth:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Operator routes: `Authorization: Bearer <OPERATOR_API_TOKEN>`
+- Internal routes: `x-internal-secret: <INTERNAL_API_SECRET>`
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `.env.example` for all runtime and execution flags.
