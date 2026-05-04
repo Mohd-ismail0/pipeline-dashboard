@@ -8,12 +8,17 @@ This dashboard now follows a lightweight "n8n-style" editing flow while keeping 
 - Rename a node using **Node label**.
 - Change a node runtime using **Node type** (HTTP, Python scrape, Browser scrape, JS script, etc).
 - Duplicate or delete a node directly from the inspector.
+- Right-click any node for context actions: edit, duplicate, delete, or replace.
 - Add nodes either by drag-drop or by clicking the **+** button in the node palette.
 - Click an edge, then use **Delete selected connection** to remove it.
+- Use keyboard shortcuts:
+  - `Ctrl/Cmd + D` duplicates selected node
+  - `Delete`/`Backspace` deletes selected node or edge
 
 ## Editing behavior
 
 - Changing **Node type** resets that node config to defaults for that handler.
+- **Replace node (keep connections)** changes handler/config in place while preserving incoming/outgoing edges.
 - Node cards show both:
   - Human-readable label (editable)
   - Runtime handler id (source of execution truth)

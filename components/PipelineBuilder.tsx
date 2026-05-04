@@ -96,6 +96,11 @@ function BuilderInner(props: {
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[]);
   const [selected, setSelected] = useState<RFNode | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [nodeContextMenu, setNodeContextMenu] = useState<{
+    nodeId: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
@@ -106,6 +111,7 @@ function BuilderInner(props: {
   const skipNextSave = useRef(true);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rfInstance = useRef<ReactFlowInstance<RFNode, Edge> | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   const validationErrorsRef = useRef<string[]>([]);
@@ -246,6 +252,7 @@ function BuilderInner(props: {
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
+      setNodeContextMenu(null);
       setSelectedEdgeId(null);
       setSelected(node as RFNode);
       setDrawerOpen(true);
@@ -254,15 +261,28 @@ function BuilderInner(props: {
   );
 
   const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
+    setNodeContextMenu(null);
     setSelected(null);
     setDrawerOpen(false);
     setSelectedEdgeId(edge.id);
   }, []);
 
   const onPaneClick = useCallback(() => {
+    setNodeContextMenu(null);
     setSelected(null);
     setSelectedEdgeId(null);
     setDrawerOpen(false);
+  }, []);
+
+  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    event.preventDefault();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const x = event.clientX - (rect?.left ?? 0);
+    const y = event.clientY - (rect?.top ?? 0);
+    setSelected(node as RFNode);
+    setSelectedEdgeId(null);
+    setDrawerOpen(false);
+    setNodeContextMenu({ nodeId: node.id, x, y });
   }, []);
 
   const onApplyConfig = useCallback(
@@ -362,6 +382,63 @@ function BuilderInner(props: {
     setSelectedEdgeId(null);
     scheduleSave();
   }, [scheduleSave, selectedEdgeId, setEdges]);
+
+  const replaceNodeKeepConnections = useCallback(
+    (nodeId: string, handlerId: string) => {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === nodeId
+            ? {
+                ...n,
+                type: PIPELINE_NODE_TYPE,
+                data: {
+                  ...n.data,
+                  config: defaultConfigForHandlerId(handlerId),
+                  handlerId,
+                  handlerVersion: "1.0.0",
+                  label:
+                    typeof n.data?.label === "string" && n.data.label.trim().length > 0
+                      ? n.data.label
+                      : handlerId.replaceAll("_", " "),
+                },
+              }
+            : n,
+        ),
+      );
+      setNodeContextMenu(null);
+      scheduleSave();
+    },
+    [scheduleSave, setNodes],
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "d" && selected?.id) {
+        event.preventDefault();
+        duplicateNode(selected.id);
+        return;
+      }
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedEdgeId) {
+        event.preventDefault();
+        deleteSelectedEdge();
+        return;
+      }
+      if ((event.key === "Delete" || event.key === "Backspace") && selected?.id) {
+        event.preventDefault();
+        deleteNode(selected.id);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [deleteNode, deleteSelectedEdge, duplicateNode, selected?.id, selectedEdgeId]);
 
   const validationErrors = useMemo(() => {
     const errs: string[] = [];
@@ -471,7 +548,7 @@ function BuilderInner(props: {
             </div>
           ))}
         </Card>
-        <div className="relative min-h-0 min-w-0 flex-1 rounded-md border bg-muted/20">
+        <div ref={canvasRef} className="relative min-h-0 min-w-0 flex-1 rounded-md border bg-muted/20">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -482,6 +559,7 @@ function BuilderInner(props: {
             onEdgesChange={wrappedOnEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            onNodeContextMenu={onNodeContextMenu}
             onEdgeClick={onEdgeClick}
             onPaneClick={onPaneClick}
             onDrop={onDrop}
@@ -495,6 +573,7 @@ function BuilderInner(props: {
             <Panel position="top-right" className="text-muted-foreground text-[10px]">
               <div className="flex flex-col items-end gap-1">
                 <span>Drag or click + to add nodes</span>
+                <span>`Ctrl/Cmd + D` duplicate, `Delete` removes selection</span>
                 {selectedEdgeId ? (
                   <Button
                     type="button"
@@ -509,6 +588,61 @@ function BuilderInner(props: {
               </div>
             </Panel>
           </ReactFlow>
+          {nodeContextMenu ? (
+            <Card
+              className="absolute z-20 w-56 p-1 shadow-xl"
+              style={{
+                left: Math.max(8, nodeContextMenu.x),
+                top: Math.max(8, nodeContextMenu.y),
+              }}
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-8 w-full justify-start text-xs"
+                onClick={() => {
+                  const node = nodesRef.current.find((n) => n.id === nodeContextMenu.nodeId);
+                  if (!node) return;
+                  setSelected(node);
+                  setDrawerOpen(true);
+                  setNodeContextMenu(null);
+                }}
+              >
+                Edit node
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-8 w-full justify-start text-xs"
+                onClick={() => duplicateNode(nodeContextMenu.nodeId)}
+              >
+                Duplicate node
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-8 w-full justify-start text-xs text-red-600 hover:text-red-600"
+                onClick={() => deleteNode(nodeContextMenu.nodeId)}
+              >
+                Delete node
+              </Button>
+              <Separator className="my-1" />
+              <p className="text-muted-foreground px-2 py-1 text-[10px]">Replace node (keep connections)</p>
+              <div className="max-h-40 overflow-y-auto">
+                {palette.map((p) => (
+                  <Button
+                    key={p.id}
+                    type="button"
+                    variant="ghost"
+                    className="h-8 w-full justify-start text-xs"
+                    onClick={() => replaceNodeKeepConnections(nodeContextMenu.nodeId, p.id)}
+                  >
+                    {p.label}
+                  </Button>
+                ))}
+              </div>
+            </Card>
+          ) : null}
         </div>
       </div>
       <NodeConfigDrawer
