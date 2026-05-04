@@ -1,4 +1,4 @@
-import type { ExecutionContext, PipelineRunResult, ScrapingConfig } from "@/types/config";
+import type { PipelineRunResult, ScrapingConfig } from "@/types/config";
 import type { PipelinePersist } from "@/types/pipeline";
 import type { Edge, Node } from "@xyflow/react";
 
@@ -67,7 +67,7 @@ export async function executePipeline(args: {
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const nodeIds = new Set(nodes.map((n) => n.id));
 
-  const { order, error } = topoSort(nodes, edges);
+  const { order, error } = topoSort(nodes as unknown as Node[], edges);
   if (error) {
     return {
       configId: config.id,
@@ -88,11 +88,6 @@ export async function executePipeline(args: {
   const incoming = incomingMap(edges, nodeIds);
   const outputs = new Map<string, unknown>();
   const nodeResults: PipelineRunResult["nodeResults"] = [];
-
-  const ctxBase: ExecutionContext = {
-    input: { target_url: config.target_url },
-    output: {},
-  };
 
   for (const id of order) {
     const node = nodeById.get(id);
@@ -137,7 +132,6 @@ export async function executePipeline(args: {
     }
     outputs.set(id, res.output);
     nodeResults.push({ nodeId: id, type, ok: true, output: res.output });
-    ctxBase.output[id] = res.output;
   }
 
   const lastId = order[order.length - 1];

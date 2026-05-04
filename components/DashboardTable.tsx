@@ -8,11 +8,12 @@ import {
   type ValueFormatterParams,
 } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
+import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,11 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import type { ScrapingConfig } from "@/types/config";
 import { MoreHorizontal, Play, Trash2, Workflow, GitCompare } from "lucide-react";
 
@@ -39,7 +36,7 @@ type ActionsParams = ICellRendererParams<ScrapingConfig, unknown> & {
 };
 
 function StatusCell(props: ICellRendererParams<ScrapingConfig>) {
-  const v = props.value as ScrapingConfig["status"];
+  const v = props.data?.status ?? "Paused";
   const variant =
     v === "Active" ? "default" : v === "Paused" ? "secondary" : "destructive";
   return (
@@ -55,54 +52,46 @@ function ActionsCell(props: ActionsParams) {
   const busy = props.busyId === id;
   return (
     <div className="flex h-full items-center gap-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="h-8 w-8"
-            disabled={busy}
-            onClick={() => props.onRun(id)}
-          >
-            <Play className="size-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Run now</TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="h-8 w-8"
-            onClick={() => props.onViewPipeline(id)}
-          >
-            <Workflow className="size-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>View pipeline</TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="h-8 w-8"
-            onClick={() => props.onViewDiff(id)}
-          >
-            <GitCompare className="size-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>View diff</TooltipContent>
-      </Tooltip>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="h-8 w-8"
+        disabled={busy}
+        title="Run now"
+        onClick={() => props.onRun(id)}
+      >
+        <Play className="size-4" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="h-8 w-8"
+        title="View pipeline"
+        onClick={() => props.onViewPipeline(id)}
+      >
+        <Workflow className="size-4" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="h-8 w-8"
+        title="View diff"
+        onClick={() => props.onViewDiff(id)}
+      >
+        <GitCompare className="size-4" />
+      </Button>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button type="button" variant="ghost" size="icon-sm" className="h-8 w-8">
-            <MoreHorizontal className="size-4" />
-          </Button>
+        <DropdownMenuTrigger
+          type="button"
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "icon-sm" }),
+            "h-8 w-8",
+          )}
+        >
+          <MoreHorizontal className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
@@ -118,15 +107,24 @@ function ActionsCell(props: ActionsParams) {
   );
 }
 
-export function DashboardTable(props: {
+export function DashboardTable({
+  configs,
+  loading,
+  onConfigsChange,
+  onRefresh,
+  onViewPipeline,
+  onViewDiff,
+  onAddRow,
+  onRowSelected,
+}: {
   configs: ScrapingConfig[];
   loading: boolean;
-  onConfigsChange: (rows: ScrapingConfig[]) => void;
+  onConfigsChange: Dispatch<SetStateAction<ScrapingConfig[]>>;
   onRefresh: () => Promise<void>;
-  onRunNow: (id: string) => Promise<void>;
   onViewPipeline: (id: string) => void;
   onViewDiff: (id: string) => void;
   onAddRow: () => Promise<void>;
+  onRowSelected?: (id: string | null) => void;
 }) {
   const [gridError, setGridError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -144,11 +142,9 @@ export function DashboardTable(props: {
         throw new Error(j.error ?? res.statusText);
       }
       const data = (await res.json()) as { config: ScrapingConfig };
-      props.onConfigsChange(
-        props.configs.map((c) => (c.id === id ? data.config : c)),
-      );
+      onConfigsChange((prev) => prev.map((c) => (c.id === id ? data.config : c)));
     },
-    [props],
+    [onConfigsChange],
   );
 
   const schedulePatch = useCallback(
@@ -159,18 +155,19 @@ export function DashboardTable(props: {
         timers.current.delete(id);
         void flushPatch(id, patch).catch((e: unknown) => {
           setGridError(e instanceof Error ? e.message : "Save failed");
-          void props.onRefresh();
+          void onRefresh();
         });
       }, 500);
       timers.current.set(id, t);
     },
-    [flushPatch, props],
+    [flushPatch, onRefresh],
   );
 
   useEffect(() => {
+    const map = timers.current;
     return () => {
-      for (const t of timers.current.values()) clearTimeout(t);
-      timers.current.clear();
+      for (const t of map.values()) clearTimeout(t);
+      map.clear();
     };
   }, []);
 
@@ -186,14 +183,14 @@ export function DashboardTable(props: {
           const j = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(j.error ?? res.statusText);
         }
-        await props.onRefresh();
+        await onRefresh();
       } catch (e: unknown) {
         setGridError(e instanceof Error ? e.message : "Run failed");
       } finally {
         setBusyId(null);
       }
     },
-    [props],
+    [onRefresh],
   );
 
   const onDelete = useCallback(
@@ -205,14 +202,14 @@ export function DashboardTable(props: {
           method: "DELETE",
         });
         if (!res.ok) throw new Error("Delete failed");
-        await props.onRefresh();
+        await onRefresh();
       } catch (e: unknown) {
         setGridError(e instanceof Error ? e.message : "Delete failed");
       } finally {
         setBusyId(null);
       }
     },
-    [props],
+    [onRefresh],
   );
 
   const columnDefs = useMemo<ColDef<ScrapingConfig>[]>(
@@ -276,14 +273,14 @@ export function DashboardTable(props: {
         cellRenderer: ActionsCell,
         cellRendererParams: {
           onRun: onRun,
-          onViewPipeline: props.onViewPipeline,
-          onViewDiff: props.onViewDiff,
+          onViewPipeline,
+          onViewDiff,
           onDelete: onDelete,
           busyId,
         },
       },
     ],
-    [busyId, onDelete, onRun, props.onViewDiff, props.onViewPipeline],
+    [busyId, onDelete, onRun, onViewDiff, onViewPipeline],
   );
 
   const defaultColDef = useMemo<ColDef<ScrapingConfig>>(
@@ -296,7 +293,7 @@ export function DashboardTable(props: {
     [],
   );
 
-  if (props.loading && props.configs.length === 0) {
+  if (loading && configs.length === 0) {
     return (
       <div className="flex flex-col gap-2 p-2">
         <Skeleton className="h-8 w-full" />
@@ -321,14 +318,14 @@ export function DashboardTable(props: {
           type="button"
           size="sm"
           className="h-8"
-          onClick={() => void props.onAddRow()}
+          onClick={() => void onAddRow()}
         >
           Add row
         </Button>
       </div>
       <div className="ag-theme-quartz min-h-0 flex-1 rounded-md border">
         <AgGridReact<ScrapingConfig>
-          rowData={props.configs}
+          rowData={configs}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
           getRowId={(p) => p.data.id}
@@ -337,6 +334,9 @@ export function DashboardTable(props: {
           suppressRowClickSelection
           headerHeight={36}
           rowHeight={36}
+          onRowClicked={(ev) => {
+            if (ev.data?.id) onRowSelected?.(ev.data.id);
+          }}
           onCellValueChanged={(ev) => {
             if (!ev.data || !ev.colDef.field) return;
             const id = ev.data.id;

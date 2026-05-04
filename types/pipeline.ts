@@ -8,7 +8,7 @@ export type PipelineNodeType =
   | "storage";
 
 /** Strict node payload aligned with execution handlers */
-export interface PipelineNodePayload {
+export interface PipelineNodePayload extends Record<string, unknown> {
   config: Record<string, unknown>;
 }
 
