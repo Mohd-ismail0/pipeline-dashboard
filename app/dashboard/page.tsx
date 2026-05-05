@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DashboardTable } from "@/components/DashboardTable";
 import { DiffDrawer } from "@/components/DiffDrawer";
@@ -16,10 +16,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PipelineRunLog, ScrapingConfig } from "@/types/config";
 import type { PipelinePersist } from "@/types/pipeline";
 import { FileStack } from "lucide-react";
+
+const SMART_AUTO_REFRESH_MS = 30_000;
+const SMART_AUTO_REFRESH_RETRY_MS = 45_000;
 
 export default function DashboardPage() {
   const [configs, setConfigs] = useState<ScrapingConfig[]>([]);
@@ -52,11 +56,13 @@ export default function DashboardPage() {
     { seq: number; type: string; nodeId: string | null; createdAt: string }[]
   >([]);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
   const [observabilityLoading, setObservabilityLoading] = useState(false);
   const [observabilityError, setObservabilityError] = useState<string | null>(null);
   const [lastObservabilityRefreshAt, setLastObservabilityRefreshAt] = useState<
     string | null
   >(null);
+  const observabilityRequestInFlight = useRef(false);
 
   const loadConfigs = useCallback(async () => {
     setLoading(true);
@@ -87,6 +93,14 @@ export default function DashboardPage() {
     if (typeof document !== "undefined" && document.visibilityState === "hidden") {
       return;
     }
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setObservabilityError("Offline: auto refresh paused until network is back.");
+      return;
+    }
+    if (observabilityRequestInFlight.current) {
+      return;
+    }
+    observabilityRequestInFlight.current = true;
     setObservabilityLoading(true);
     try {
       const [mRes, rRes] = await Promise.all([
@@ -118,6 +132,7 @@ export default function DashboardPage() {
       setObservabilityError("Dashboard refresh failed. Check network/auth and retry.");
     } finally {
       setObservabilityLoading(false);
+      observabilityRequestInFlight.current = false;
     }
   }, []);
 
@@ -141,6 +156,36 @@ export default function DashboardPage() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [refreshObservability]);
+
+  useEffect(() => {
+    if (!autoRefreshEnabled) {
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutRef: ReturnType<typeof setTimeout> | null = null;
+
+    const schedule = (delayMs: number) => {
+      timeoutRef = setTimeout(() => {
+        void tick();
+      }, delayMs);
+    };
+
+    const tick = async () => {
+      if (cancelled) return;
+      await refreshObservability();
+      if (cancelled) return;
+      schedule(observabilityError ? SMART_AUTO_REFRESH_RETRY_MS : SMART_AUTO_REFRESH_MS);
+    };
+
+    void refreshObservability();
+    schedule(SMART_AUTO_REFRESH_MS);
+
+    return () => {
+      cancelled = true;
+      if (timeoutRef) clearTimeout(timeoutRef);
+    };
+  }, [autoRefreshEnabled, observabilityError, refreshObservability]);
 
   useEffect(() => {
     void (async () => {
@@ -215,6 +260,15 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Smart auto-refresh</span>
+              <Switch
+                size="sm"
+                checked={autoRefreshEnabled}
+                onCheckedChange={(checked) => setAutoRefreshEnabled(Boolean(checked))}
+                aria-label="Toggle smart auto-refresh"
+              />
+            </label>
             <Button
               type="button"
               variant="outline"
