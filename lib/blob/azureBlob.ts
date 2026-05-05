@@ -16,7 +16,7 @@ function getBlobServiceClient(): BlobServiceClient | null {
 }
 
 export function documentsContainerName(): string {
-  return readEnvTrimmed("AZURE_STORAGE_DOCUMENTS_CONTAINER") || "pipeline-documents";
+  return readEnvTrimmed("AZURE_STORAGE_DOCUMENTS_CONTAINER") || "documents";
 }
 
 export async function uploadDocumentBlob(args: {

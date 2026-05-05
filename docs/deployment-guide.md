@@ -36,8 +36,8 @@ Set these for production:
 - `OPERATOR_API_TOKEN`
 - `INTERNAL_API_SECRET`
 - `AZURE_STORAGE_CONNECTION_STRING`
-- `AZURE_STORAGE_QUEUE_NAME` (default `pipeline-runs` if omitted)
-- `AZURE_STORAGE_DOCUMENTS_CONTAINER` (for blob docs)
+- `AZURE_STORAGE_QUEUE_NAME` (optional; defaults to `pipeline-runs` if omitted)
+- `AZURE_STORAGE_DOCUMENTS_CONTAINER` (optional; defaults to `documents`)
 - `USE_LOCAL_EXECUTOR=false`
 - `DISABLE_IN_PROCESS_SCHEDULER=true`
 - `AZURE_TIMER_SCHEDULE_ENABLED=true`

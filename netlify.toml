@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # These are resource names (not credentials). Their low-entropy values
+  # (e.g. "pipeline-runs", "documents") appear in route/docs/build output and
+  # trigger false positives in Netlify's secret scanner.
+  SECRETS_SCAN_OMIT_KEYS = "AZURE_STORAGE_QUEUE_NAME,AZURE_STORAGE_DOCUMENTS_CONTAINER"
+
