@@ -52,6 +52,11 @@ export default function DashboardPage() {
     { seq: number; type: string; nodeId: string | null; createdAt: string }[]
   >([]);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [observabilityLoading, setObservabilityLoading] = useState(false);
+  const [observabilityError, setObservabilityError] = useState<string | null>(null);
+  const [lastObservabilityRefreshAt, setLastObservabilityRefreshAt] = useState<
+    string | null
+  >(null);
 
   const loadConfigs = useCallback(async () => {
     setLoading(true);
@@ -82,36 +87,59 @@ export default function DashboardPage() {
     if (typeof document !== "undefined" && document.visibilityState === "hidden") {
       return;
     }
-    const [mRes, rRes] = await Promise.all([
-      fetch("/api/metrics"),
-      fetch("/api/runs?limit=8"),
-    ]);
-    if (mRes.ok) {
-      setMetrics(
-        (await mRes.json()) as {
-          totalCronRuns: number;
-          cronSuccess: number;
-          cronFailed: number;
-          manualRuns: number;
-          lastRunAt: string | null;
-        },
-      );
-    }
-    if (rRes.ok) {
-      const data = (await rRes.json()) as { runs: PipelineRunLog[] };
-      setRecentRuns(data.runs ?? []);
+    setObservabilityLoading(true);
+    try {
+      const [mRes, rRes] = await Promise.all([
+        fetch("/api/metrics", { cache: "no-store" }),
+        fetch("/api/runs?limit=8", { cache: "no-store" }),
+      ]);
+      if (mRes.ok) {
+        setMetrics(
+          (await mRes.json()) as {
+            totalCronRuns: number;
+            cronSuccess: number;
+            cronFailed: number;
+            manualRuns: number;
+            lastRunAt: string | null;
+          },
+        );
+      }
+      if (rRes.ok) {
+        const data = (await rRes.json()) as { runs: PipelineRunLog[] };
+        setRecentRuns(data.runs ?? []);
+      }
+      if (!mRes.ok || !rRes.ok) {
+        setObservabilityError("Some dashboard data could not be refreshed.");
+      } else {
+        setObservabilityError(null);
+      }
+      setLastObservabilityRefreshAt(new Date().toISOString());
+    } catch {
+      setObservabilityError("Dashboard refresh failed. Check network/auth and retry.");
+    } finally {
+      setObservabilityLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void (async () => {
-      await Promise.resolve();
-      await refreshObservability();
-    })();
-    const id = setInterval(() => {
+    void refreshObservability();
+  }, [refreshObservability]);
+
+  useEffect(() => {
+    const onFocus = () => {
       void refreshObservability();
-    }, 4000);
-    return () => clearInterval(id);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshObservability();
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [refreshObservability]);
 
   useEffect(() => {
@@ -192,6 +220,16 @@ export default function DashboardPage() {
               variant="outline"
               size="sm"
               className="h-8"
+              onClick={() => void refreshObservability()}
+              disabled={observabilityLoading}
+            >
+              {observabilityLoading ? "Refreshing..." : "Refresh"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
               disabled={!selectedId}
               onClick={() => setDocsOpen(true)}
             >
@@ -263,6 +301,18 @@ export default function DashboardPage() {
                 {saveError}
               </CardContent>
             </Card>
+          ) : null}
+          {observabilityError ? (
+            <Card className="border-destructive/40 py-2">
+              <CardContent className="px-3 py-1 text-xs text-red-600 dark:text-red-400">
+                {observabilityError}
+              </CardContent>
+            </Card>
+          ) : null}
+          {lastObservabilityRefreshAt ? (
+            <p className="text-muted-foreground text-[11px]">
+              Last updated {new Date(lastObservabilityRefreshAt).toLocaleTimeString()}
+            </p>
           ) : null}
           <TabsContent value="configs" className="mt-0 min-h-0 flex-1">
             <Card className="flex h-full min-h-[480px] flex-col py-0">

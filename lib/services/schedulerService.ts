@@ -13,8 +13,24 @@ import { queueService } from "./queueService";
  */
 const lastEvaluated = new Map<string, number>();
 
-let intervalRef: ReturnType<typeof setInterval> | null = null;
+let timerRef: ReturnType<typeof setTimeout> | null = null;
 let running = false;
+
+const DEFAULT_SCHEDULER_TICK_MS = 60_000;
+
+function scheduleNextTick(delayMs = DEFAULT_SCHEDULER_TICK_MS) {
+  if (timerRef) return;
+  timerRef = setTimeout(() => {
+    timerRef = null;
+    void tickScheduler()
+      .catch(() => {
+        // ignore and continue scheduling; callers are not awaiting this path
+      })
+      .finally(() => {
+        scheduleNextTick();
+      });
+  }, delayMs);
+}
 
 /** Single evaluation pass (used by Azure Timer hitting internal API). */
 export async function runSchedulerTickOnce() {
@@ -81,9 +97,7 @@ export const schedulerService = {
 
   start() {
     if (!allowInProcessScheduler()) return;
-    if (intervalRef) return;
-    intervalRef = setInterval(() => {
-      void tickScheduler();
-    }, 15_000);
+    if (timerRef) return;
+    scheduleNextTick();
   },
 };
