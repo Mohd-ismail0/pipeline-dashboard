@@ -137,7 +137,10 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    void refreshObservability();
+    const id = setTimeout(() => {
+      void refreshObservability();
+    }, 0);
+    return () => clearTimeout(id);
   }, [refreshObservability]);
 
   useEffect(() => {
@@ -178,8 +181,7 @@ export default function DashboardPage() {
       schedule(observabilityError ? SMART_AUTO_REFRESH_RETRY_MS : SMART_AUTO_REFRESH_MS);
     };
 
-    void refreshObservability();
-    schedule(SMART_AUTO_REFRESH_MS);
+    schedule(0);
 
     return () => {
       cancelled = true;

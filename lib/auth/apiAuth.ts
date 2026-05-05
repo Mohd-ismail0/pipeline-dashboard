@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "crypto";
+
 import { NextResponse } from "next/server";
 
 function bearerFrom(req: Request): string | null {
@@ -9,9 +11,16 @@ function bearerFrom(req: Request): string | null {
 
 export function requireOperatorAuth(req: Request): NextResponse | null {
   const configured = process.env.OPERATOR_API_TOKEN?.trim();
-  if (!configured) return null;
+  const mustBeConfigured = process.env.REQUIRE_OPERATOR_API_TOKEN === "true";
+  if (!configured) {
+    if (!mustBeConfigured) return null;
+    return NextResponse.json(
+      { error: "Operator auth not configured" },
+      { status: 500 },
+    );
+  }
   const got = bearerFrom(req);
-  if (!got || got !== configured) {
+  if (!got || !safeTokenEqual(got, configured)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   return null;
@@ -23,9 +32,16 @@ export function requireInternalAuth(req: Request): NextResponse | null {
     return NextResponse.json({ error: "Internal auth not configured" }, { status: 500 });
   }
   const got = req.headers.get("x-internal-secret")?.trim();
-  if (!got || got !== configured) {
+  if (!got || !safeTokenEqual(got, configured)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   return null;
+}
+
+function safeTokenEqual(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a, "utf-8");
+  const bBuf = Buffer.from(b, "utf-8");
+  if (aBuf.length !== bBuf.length) return false;
+  return timingSafeEqual(aBuf, bBuf);
 }
 

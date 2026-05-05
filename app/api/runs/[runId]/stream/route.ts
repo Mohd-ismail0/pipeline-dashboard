@@ -22,6 +22,7 @@ export async function GET(req: Request, ctx: RouteParams) {
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
+      let id: ReturnType<typeof setInterval> | null = null;
       const tick = async () => {
         try {
           const events = await runEventService.listByRunId(runId);
@@ -34,15 +35,22 @@ export async function GET(req: Request, ctx: RouteParams) {
             }
           }
         } catch {
+          if (id) {
+            clearInterval(id);
+            id = null;
+          }
           controller.close();
         }
       };
 
       void tick();
-      const id = setInterval(() => void tick(), 2000);
+      id = setInterval(() => void tick(), 2000);
 
       req.signal.addEventListener("abort", () => {
-        clearInterval(id);
+        if (id) {
+          clearInterval(id);
+          id = null;
+        }
         try {
           controller.close();
         } catch {
