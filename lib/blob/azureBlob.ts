@@ -1,21 +1,22 @@
 import { BlobServiceClient } from "@azure/storage-blob";
 
 import { azureStorageConfigured } from "@/lib/env/execution";
+import { readEnv, readEnvTrimmed } from "@/lib/env/runtime";
 
 let client: BlobServiceClient | null = null;
 
 function getBlobServiceClient(): BlobServiceClient | null {
   if (!azureStorageConfigured()) return null;
   if (!client) {
-    client = BlobServiceClient.fromConnectionString(
-      process.env.AZURE_STORAGE_CONNECTION_STRING!,
-    );
+    const conn = readEnv("AZURE_STORAGE_CONNECTION_STRING");
+    if (!conn) return null;
+    client = BlobServiceClient.fromConnectionString(conn);
   }
   return client;
 }
 
 export function documentsContainerName(): string {
-  return process.env.AZURE_STORAGE_DOCUMENTS_CONTAINER?.trim() || "pipeline-documents";
+  return readEnvTrimmed("AZURE_STORAGE_DOCUMENTS_CONTAINER") || "pipeline-documents";
 }
 
 export async function uploadDocumentBlob(args: {

@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 
 import { blobService } from "@/lib/services/blobService";
+import { isEnvTrue } from "@/lib/env/runtime";
 import type { ScrapingConfig } from "@/types/config";
 import type {
   DiffNodeConfig,
@@ -245,7 +246,7 @@ async function handleJsScript(
   const c = asRecord(node.data?.config);
   const mode = String(c.mode ?? "stub");
   if (mode === "eval_upstream") {
-    if (process.env.ALLOW_UNSAFE_JS_SCRIPT_EVAL !== "true") {
+    if (!isEnvTrue("ALLOW_UNSAFE_JS_SCRIPT_EVAL")) {
       return {
         ok: false,
         error:

@@ -1,9 +1,10 @@
 import { PrismaClient } from "@prisma/client";
+import { readEnv, readEnvTrimmed } from "@/lib/env/runtime";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
 export function getPrisma(): PrismaClient {
-  if (!process.env.DATABASE_URL) {
+  if (!readEnv("DATABASE_URL")) {
     throw new Error("DATABASE_URL is not set");
   }
   if (!globalForPrisma.prisma) {
@@ -13,5 +14,5 @@ export function getPrisma(): PrismaClient {
 }
 
 export function isPrismaEnabled(): boolean {
-  return Boolean(process.env.DATABASE_URL?.trim());
+  return Boolean(readEnvTrimmed("DATABASE_URL"));
 }

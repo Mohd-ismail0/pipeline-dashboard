@@ -1,9 +1,11 @@
 /**
  * Runtime flags for local vs Azure execution paths.
  */
+import { isEnvTrue, readEnvTrimmed } from "@/lib/env/runtime";
+
 /** When false, prefer queue or `RUN_PIPELINE_ORCHESTRATION_URL` instead of in-process runner. */
 export function localPipelineExecutionEnabled(): boolean {
-  return process.env.USE_LOCAL_EXECUTOR !== "false";
+  return readEnvTrimmed("USE_LOCAL_EXECUTOR") !== "false";
 }
 
 /**
@@ -16,21 +18,21 @@ export function useLocalExecutor(): boolean {
 
 /** When set, POST manual/cron runs to this durable HTTP starter URL (full URL). */
 export function remoteOrchestratorStartUrl(): string | undefined {
-  const u = process.env.RUN_PIPELINE_ORCHESTRATION_URL?.trim();
+  const u = readEnvTrimmed("RUN_PIPELINE_ORCHESTRATION_URL");
   return u || undefined;
 }
 
 /** In-process cron + queue consumer (dev). Disable in production Azure. */
 export function allowInProcessScheduler(): boolean {
-  if (process.env.DISABLE_IN_PROCESS_SCHEDULER === "true") return false;
-  if (process.env.AZURE_TIMER_SCHEDULE_ENABLED === "true") return false;
+  if (isEnvTrue("DISABLE_IN_PROCESS_SCHEDULER")) return false;
+  if (isEnvTrue("AZURE_TIMER_SCHEDULE_ENABLED")) return false;
   return true;
 }
 
 export function azureStorageConfigured(): boolean {
-  return Boolean(process.env.AZURE_STORAGE_CONNECTION_STRING?.trim());
+  return Boolean(readEnvTrimmed("AZURE_STORAGE_CONNECTION_STRING"));
 }
 
 export function azureRunQueueName(): string {
-  return process.env.AZURE_STORAGE_QUEUE_NAME?.trim() || "pipeline-runs";
+  return readEnvTrimmed("AZURE_STORAGE_QUEUE_NAME") || "pipeline-runs";
 }

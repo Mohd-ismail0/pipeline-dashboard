@@ -1,12 +1,14 @@
 import { QueueClient } from "@azure/storage-queue";
 
 import { azureRunQueueName, azureStorageConfigured } from "@/lib/env/execution";
+import { readEnv } from "@/lib/env/runtime";
 
 let queueClient: QueueClient | null = null;
 
 function getQueueClient(): QueueClient | null {
   if (!azureStorageConfigured()) return null;
-  const conn = process.env.AZURE_STORAGE_CONNECTION_STRING!;
+  const conn = readEnv("AZURE_STORAGE_CONNECTION_STRING");
+  if (!conn) return null;
   const name = azureRunQueueName();
   if (!queueClient) {
     queueClient = new QueueClient(conn, name);

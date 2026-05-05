@@ -1,5 +1,6 @@
 import { executePipeline } from "@/lib/pipeline/executor";
 import { localPipelineExecutionEnabled, remoteOrchestratorStartUrl } from "@/lib/env/execution";
+import { readEnvTrimmed } from "@/lib/env/runtime";
 import { EMPTY_PIPELINE } from "@/lib/store/appState";
 import { readAppState, updateAppState } from "@/lib/store/appStore";
 import type { PipelinePersist } from "@/types/pipeline";
@@ -78,7 +79,7 @@ export async function runPipelineForConfig(args: {
   const remoteUrl = remoteOrchestratorStartUrl();
   if (!localPipelineExecutionEnabled() && remoteUrl) {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const secret = process.env.INTERNAL_API_SECRET?.trim();
+    const secret = readEnvTrimmed("INTERNAL_API_SECRET");
     if (secret) headers["x-internal-secret"] = secret;
     const res = await fetch(remoteUrl, {
       method: "POST",

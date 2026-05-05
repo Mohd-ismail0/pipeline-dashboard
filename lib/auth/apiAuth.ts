@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "crypto";
 
 import { NextResponse } from "next/server";
+import { isEnvTrue, readEnvTrimmed } from "@/lib/env/runtime";
 
 function bearerFrom(req: Request): string | null {
   const raw = req.headers.get("authorization")?.trim();
@@ -10,8 +11,8 @@ function bearerFrom(req: Request): string | null {
 }
 
 export function requireOperatorAuth(req: Request): NextResponse | null {
-  const configured = process.env.OPERATOR_API_TOKEN?.trim();
-  const mustBeConfigured = process.env.REQUIRE_OPERATOR_API_TOKEN === "true";
+  const configured = readEnvTrimmed("OPERATOR_API_TOKEN");
+  const mustBeConfigured = isEnvTrue("REQUIRE_OPERATOR_API_TOKEN");
   if (!configured) {
     if (!mustBeConfigured) return null;
     return NextResponse.json(
@@ -27,7 +28,7 @@ export function requireOperatorAuth(req: Request): NextResponse | null {
 }
 
 export function requireInternalAuth(req: Request): NextResponse | null {
-  const configured = process.env.INTERNAL_API_SECRET?.trim();
+  const configured = readEnvTrimmed("INTERNAL_API_SECRET");
   if (!configured) {
     return NextResponse.json({ error: "Internal auth not configured" }, { status: 500 });
   }
